@@ -1,4 +1,51 @@
 from ursina import *
+import random
+
+# --- Nueva seccion Clase ServidorRoto
+class ServidorRoto(Entity):
+    def __init__(self, position=(0,0,0)):
+        # Decidir si está caído o en pie
+        esta_caido = random.random() > 0.7
+        rot_z = random.uniform(-10, 10) if not esta_caido else 90
+        rot_y = random.choice([0, 90, 180, 270])
+        
+        super().__init__(
+            model='cube',
+            position=position,
+            scale=(1.8, 3.5, 1.8), # Proporción más realista para tu escala 150
+            color=color.hex('#222222'),
+            rotation=(0, rot_y, rot_z),
+            collider='box'
+        )
+
+        # Panel frontal de luces
+        self.panel = Entity(
+            parent=self,
+            model='cube',
+            scale=(0.85, 0.9, 0.05),
+            z=-0.51,
+            color=color.black
+        )
+
+        # Generar luces de error
+        self.luces = []
+        for i in range(random.randint(2, 6)):
+            luz = Entity(
+                parent=self.panel,
+                model='cube',
+                color=random.choice([color.red, color.hex('#444444'), color.orange]),
+                scale=(0.15, 0.05, 1),
+                x=-0.25,
+                y=0.4 - (i * 0.15)
+            )
+            self.luces.append(luz)
+
+    def update(self):
+        # Solo parpadean si no están "fundidas" (gris)
+        for luz in self.luces:
+            if luz.color != color.hex('#444444'):
+                if random.random() > 0.97:
+                    luz.enabled = not luz.enabled
 
 def construir_piso(nivel, altura_techo=20):
     """
@@ -62,3 +109,20 @@ def construir_piso(nivel, altura_techo=20):
             color=color.cyan,
             collider='box'
         )
+
+     # --- NUEVA SECCIÓN: ZONA DE SERVIDORES CATASTRÓFICOS ---
+    # Crear "pasillos" de servidores en el cuadrante Norte-Oeste
+    for z in range(20, 60, 6):      # Filas de servidores
+        for x in range(-60, -20, 4): # Servidores por fila    
+            if random.random() > 0.2:
+                # Calculamos la posición: y_base + 1.75 para que estén sobre el suelo
+                pos_servidor = (x, y_base + 1.75, z)
+                ServidorRoto(position=pos_servidor)
+
+    # Añadir algunos escombros (servidores tirados al azar en el centro)
+    for _ in range(5):
+        pos_azar = (random.uniform(-30, 30), y_base + 0.5, random.uniform(-30, 30))
+        # Evitar que aparezcan dentro del ascensor (0,0,0)
+        if abs(pos_azar[0]) > 10: 
+            s = ServidorRoto(position=pos_azar)
+            s.rotation_x = 90 # Tirado en el suelo
