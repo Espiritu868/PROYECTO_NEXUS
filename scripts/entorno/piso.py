@@ -1,8 +1,6 @@
 from ursina import Entity, color
 
-def generar_piso(centro_x, centro_z, tamano):
-    # Aumentamos el tamaño de la baldosa x10
-    tamano_baldosa = 100 
+def generar_piso(centro_x, centro_z, tamano, indice_arena=0): 
     mitad = tamano // 2
     
     inicio_x = centro_x - mitad
@@ -11,15 +9,35 @@ def generar_piso(centro_x, centro_z, tamano):
     fin_z = centro_z + mitad
 
     padre_piso = Entity()
+    
+    if indice_arena == 1:
+        # Habitación medieval: USAMOS UN SOLO PLANO con textura repetida. ¡1 sola entidad en vez de 1600 para que vaya a 60FPS!
+        Entity(
+            parent=padre_piso,
+            model='plane',
+            texture='assets/texturas/medieval/Textures/planks.png',
+            position=(centro_x, 0, centro_z),
+            collider='box',
+            scale=(tamano, 1, tamano),
+            texture_scale=(tamano/10, tamano/10) # Repetimos la textura para que no se estire
+        )
+    else:
+        # Fábrica: usamos baldosas gigantes para optimizar
+        tamano_baldosa = 100
+        modelo_suelo = 'assets/texturas/factory/floor-large.obj'
+        textura_suelo = 'assets/texturas/factory/Textures/colormap.png'
+        # El modelo mide 2x2. Para cubrir 100x100, escalamos X y Z por 50. Mantenemos Y en 1.
+        escala = (50, 1, 50)
 
-    for x in range(inicio_x, fin_x, tamano_baldosa):
-        for z in range(inicio_z, fin_z, tamano_baldosa):
-            Entity(
-                parent=padre_piso,
-                model='assets/texturas/floor.glb',
-                position=(x + (tamano_baldosa/2), 0, z + (tamano_baldosa/2)),
-                collider='box',
-                color=color.white,
-                # Escala masiva para cubrir todo ese espacio extra
-                scale=(100, 1, 100) 
-            )
+        for x in range(inicio_x, fin_x, tamano_baldosa):
+            for z in range(inicio_z, fin_z, tamano_baldosa):
+                Entity(
+                    parent=padre_piso,
+                    model=modelo_suelo,
+                    texture=textura_suelo,
+                    position=(x + (tamano_baldosa/2), 0, z + (tamano_baldosa/2)),
+                    collider='box',
+                    scale=escala 
+                )
+
+    return padre_piso
