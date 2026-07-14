@@ -1,0 +1,216 @@
+<CoordinateSystem> { Y-Up }
+
+<Comment> {
+  "dae2egg -a chan -o 'assets\modelos\villians\golem\5000_Faces\Walk Backward.egg' 'assets\modelos\villians\golem\5000_Faces\Walk Backward.dae'"
+}
+<Table> {
+  <Bundle> RootNode {
+    <Table> "<skeleton>" {
+      <Table> mixamorig_Hips {
+        <Xfm$Anim_S$> xform {
+          <Scalar> fps { inf }
+        }
+        <Table> mixamorig_Spine {
+          <Xfm$Anim_S$> xform {
+            <Scalar> fps { inf }
+          }
+          <Table> mixamorig_Spine1 {
+            <Xfm$Anim_S$> xform {
+              <Scalar> fps { inf }
+            }
+            <Table> mixamorig_Spine2 {
+              <Xfm$Anim_S$> xform {
+                <Scalar> fps { inf }
+              }
+              <Table> mixamorig_Neck {
+                <Xfm$Anim_S$> xform {
+                  <Scalar> fps { inf }
+                }
+                <Table> mixamorig_Head {
+                  <Xfm$Anim_S$> xform {
+                    <Scalar> fps { inf }
+                  }
+                  <Table> mixamorig_HeadTop_End {
+                    <Xfm$Anim_S$> xform {
+                      <Scalar> fps { inf }
+                    }
+                  }
+                }
+              }
+              <Table> mixamorig_LeftShoulder {
+                <Xfm$Anim_S$> xform {
+                  <Scalar> fps { inf }
+                }
+                <Table> mixamorig_LeftArm {
+                  <Xfm$Anim_S$> xform {
+                    <Scalar> fps { inf }
+                  }
+                  <Table> mixamorig_LeftForeArm {
+                    <Xfm$Anim_S$> xform {
+                      <Scalar> fps { inf }
+                    }
+                    <Table> mixamorig_LeftHand {
+                      <Xfm$Anim_S$> xform {
+                        <Scalar> fps { inf }
+                      }
+                      <Table> mixamorig_LeftHandThumb1 {
+                        <Xfm$Anim_S$> xform {
+                          <Scalar> fps { inf }
+                        }
+                        <Table> mixamorig_LeftHandThumb2 {
+                          <Xfm$Anim_S$> xform {
+                            <Scalar> fps { inf }
+                          }
+                          <Table> mixamorig_LeftHandThumb3 {
+                            <Xfm$Anim_S$> xform {
+                              <Scalar> fps { inf }
+                            }
+                            <Table> mixamorig_LeftHandThumb4 {
+                              <Xfm$Anim_S$> xform {
+                                <Scalar> fps { inf }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      <Table> mixamorig_LeftHandIndex1 {
+                        <Xfm$Anim_S$> xform {
+                          <Scalar> fps { inf }
+                        }
+                        <Table> mixamorig_LeftHandIndex2 {
+                          <Xfm$Anim_S$> xform {
+                            <Scalar> fps { inf }
+                          }
+                          <Table> mixamorig_LeftHandIndex3 {
+                            <Xfm$Anim_S$> xform {
+                              <Scalar> fps { inf }
+                            }
+                            <Table> mixamorig_LeftHandIndex4 {
+                              <Xfm$Anim_S$> xform {
+                                <Scalar> fps { inf }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              <Table> mixamorig_RightShoulder {
+                <Xfm$Anim_S$> xform {
+                  <Scalar> fps { inf }
+                }
+                <Table> mixamorig_RightArm {
+                  <Xfm$Anim_S$> xform {
+                    <Scalar> fps { inf }
+                  }
+                  <Table> mixamorig_RightForeArm {
+                    <Xfm$Anim_S$> xform {
+                      <Scalar> fps { inf }
+                    }
+                    <Table> mixamorig_RightHand {
+                      <Xfm$Anim_S$> xform {
+                        <Scalar> fps { inf }
+                      }
+                      <Table> mixamorig_RightHandThumb1 {
+                        <Xfm$Anim_S$> xform {
+                          <Scalar> fps { inf }
+                        }
+                        <Table> mixamorig_RightHandThumb2 {
+                          <Xfm$Anim_S$> xform {
+                            <Scalar> fps { inf }
+                          }
+                          <Table> mixamorig_RightHandThumb3 {
+                            <Xfm$Anim_S$> xform {
+                              <Scalar> fps { inf }
+                            }
+                            <Table> mixamorig_RightHandThumb4 {
+                              <Xfm$Anim_S$> xform {
+                                <Scalar> fps { inf }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      <Table> mixamorig_RightHandIndex1 {
+                        <Xfm$Anim_S$> xform {
+                          <Scalar> fps { inf }
+                        }
+                        <Table> mixamorig_RightHandIndex2 {
+                          <Xfm$Anim_S$> xform {
+                            <Scalar> fps { inf }
+                          }
+                          <Table> mixamorig_RightHandIndex3 {
+                            <Xfm$Anim_S$> xform {
+                              <Scalar> fps { inf }
+                            }
+                            <Table> mixamorig_RightHandIndex4 {
+                              <Xfm$Anim_S$> xform {
+                                <Scalar> fps { inf }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        <Table> mixamorig_LeftUpLeg {
+          <Xfm$Anim_S$> xform {
+            <Scalar> fps { inf }
+          }
+          <Table> mixamorig_LeftLeg {
+            <Xfm$Anim_S$> xform {
+              <Scalar> fps { inf }
+            }
+            <Table> mixamorig_LeftFoot {
+              <Xfm$Anim_S$> xform {
+                <Scalar> fps { inf }
+              }
+              <Table> mixamorig_LeftToeBase {
+                <Xfm$Anim_S$> xform {
+                  <Scalar> fps { inf }
+                }
+                <Table> mixamorig_LeftToe_End {
+                  <Xfm$Anim_S$> xform {
+                    <Scalar> fps { inf }
+                  }
+                }
+              }
+            }
+          }
+        }
+        <Table> mixamorig_RightUpLeg {
+          <Xfm$Anim_S$> xform {
+            <Scalar> fps { inf }
+          }
+          <Table> mixamorig_RightLeg {
+            <Xfm$Anim_S$> xform {
+              <Scalar> fps { inf }
+            }
+            <Table> mixamorig_RightFoot {
+              <Xfm$Anim_S$> xform {
+                <Scalar> fps { inf }
+              }
+              <Table> mixamorig_RightToeBase {
+                <Xfm$Anim_S$> xform {
+                  <Scalar> fps { inf }
+                }
+                <Table> mixamorig_RightToe_End {
+                  <Xfm$Anim_S$> xform {
+                    <Scalar> fps { inf }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

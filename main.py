@@ -1,6 +1,23 @@
 from ursina import Ursina, DirectionalLight, AmbientLight, color, window, application, scene
 import random
 
+# --- PARCHE PARA MODELOS GLB EXTERNOS ---
+# Al convertir FBX a GLB en internet, a veces dejan rutas absolutas a imágenes que no existen.
+# Este parche evita que Panda3D crashee y simplemente ignore esas texturas faltantes.
+import gltf._converter
+from panda3d.core import Texture
+original_load_texture = gltf._converter.Converter.load_texture
+
+def patched_load_texture(self, texid, gltf_tex, gltf_data):
+    try:
+        original_load_texture(self, texid, gltf_tex, gltf_data)
+    except RuntimeError as e:
+        print(f"Ignorando textura faltante: {e}")
+        self.textures[texid] = Texture()
+
+gltf._converter.Converter.load_texture = patched_load_texture
+# ----------------------------------------
+
 from scripts.escenario import CoordinadorEscenario
 from scripts.jugador import Jugador
 from scripts.villano_l import VillanoL
@@ -45,27 +62,38 @@ for indice in range(coordinador.num_arenas):
     centro_arena_x = 0
     centro_arena_z = indice * coordinador.offset_z
     
-    # Las arenas se vuelven progresivamente más difíciles (4, 7, 10, 13 enemigos)
-    cantidad_enemigos = 4 + (indice * 3)
     enemigos_arena = []
     
-    for _ in range(cantidad_enemigos):
-        offset_x = random.choice([random.randint(-150, -50), random.randint(50, 150)])
-        offset_z = random.randint(-150, 150)
+    if indice == 0:
+        # --- SPAWN DEL JEFE (ARENA 0) ---
+        from scripts.golem import GolemBoss
+        # Lo ponemos más cerca (z + 40) para que no lo oculte la oscuridad total (100m)
+        jefe = GolemBoss(position=(centro_arena_x, 0, centro_arena_z + 40))
+        enemigos_arena.append(jefe)
         
-        posicion_aleatoria = (centro_arena_x + offset_x, 0, centro_arena_z + offset_z)
-        rotacion_aleatoria = random.randint(0, 360) 
-        
-        tipo_enemigo = random.choice(['l', 'o', 'zombie'])
-        if tipo_enemigo == 'zombie':
-            textura_z = random.choice(['assets/modelos/textures/texture-l.png', 'assets/modelos/textures/texture-o.png'])
-            enemigo = Zombie(textura_zombie=textura_z, position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
-        elif tipo_enemigo == 'l':
-            enemigo = VillanoL(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
-        else:
-            enemigo = VillanoO(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
+        # También le ponemos 2 zombies como esbirros
+        enemigos_arena.append(Zombie(textura_zombie='assets/modelos/textures/texture-l.png', position=(centro_arena_x - 15, 0, centro_arena_z + 40)))
+        enemigos_arena.append(Zombie(textura_zombie='assets/modelos/textures/texture-o.png', position=(centro_arena_x + 15, 0, centro_arena_z + 40)))
+    else:
+        # --- SPAWN NORMAL (OTRAS ARENAS) ---
+        cantidad_enemigos = 4 + (indice * 3)
+        for _ in range(cantidad_enemigos):
+            offset_x = random.choice([random.randint(-150, -50), random.randint(50, 150)])
+            offset_z = random.randint(-150, 150)
             
-        enemigos_arena.append(enemigo)
+            posicion_aleatoria = (centro_arena_x + offset_x, 0, centro_arena_z + offset_z)
+            rotacion_aleatoria = random.randint(0, 360) 
+            
+            tipo_enemigo = random.choice(['l', 'o', 'zombie'])
+            if tipo_enemigo == 'zombie':
+                textura_z = random.choice(['assets/modelos/textures/texture-l.png', 'assets/modelos/textures/texture-o.png'])
+                enemigo = Zombie(textura_zombie=textura_z, position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
+            elif tipo_enemigo == 'l':
+                enemigo = VillanoL(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
+            else:
+                enemigo = VillanoO(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
+                
+            enemigos_arena.append(enemigo)
         
     puertas_f = coordinador.puertas_frente_por_arena[indice]
     puertas_a = coordinador.puertas_atras_por_arena[indice]
