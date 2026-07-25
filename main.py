@@ -171,6 +171,13 @@ def iniciar_carga_pesada():
         gestores_arena.append(gestor)
 
     actualizar_loading(1.0, "¡Listos para el combate!")
+    
+    # Pre-calentamiento del motor (Engine Warmup):
+    # Obligamos a Panda3D a procesar los árboles de colisiones (KD-Trees), shaders y físicas de los miles de 
+    # muros generados en este preciso momento, MIENTRAS la pantalla de carga aún está puesta para ocultar el lag.
+    for _ in range(3):
+        application.base.taskMgr.step()
+        
     carga_terminada = True
 
 if __name__ == '__main__':

@@ -262,6 +262,9 @@ class Jugador(Entity):
         if self.esta_muerto:
             return
             
+        # Limitar dt para evitar glitches físicos durante picos de lag (como al cargar el juego)
+        dt = min(time.dt, 0.05)
+
         # --- CONTROL DE CÁMARA ---
         if held_keys['control']:
             self.pivot_camara.rotation_y = 180
@@ -324,7 +327,7 @@ class Jugador(Entity):
         if self.atacando:
             direccion = Vec3(0,0,0)
             
-        desplazamiento = direccion * velocidad * time.dt
+        desplazamiento = direccion * velocidad * dt
         
         # --- FISICAS DE COLISIÓN HORIZONTAL ---
         if desplazamiento.x != 0:
@@ -342,15 +345,15 @@ class Jugador(Entity):
             self.velocidad_y = self.velocidad_salto
             self.en_suelo = False
             
-        self.velocidad_y -= self.gravedad * time.dt
+        self.velocidad_y -= self.gravedad * dt
         hit_info = raycast(self.position + Vec3(0, 1.0, 0), direction=(0, -1, 0), ignore=(self,))
         
-        if hit_info.hit and hit_info.distance <= (1.0 - (self.velocidad_y * time.dt)):
+        if hit_info.hit and hit_info.distance <= (1.0 - (self.velocidad_y * dt)):
             self.y = hit_info.world_point.y
             self.velocidad_y = 0
             self.en_suelo = True
         else:
-            self.y += self.velocidad_y * time.dt
+            self.y += self.velocidad_y * dt
             self.en_suelo = False
             
         # --- ACTUALIZAR RADAR TÁCTICO BIOLÓGICO ---
