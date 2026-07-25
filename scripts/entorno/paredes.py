@@ -1,4 +1,4 @@
-from ursina import Entity
+from ursina import Entity, scene
 from scripts.entorno.puerta import Puerta
 
 def generar_paredes(centro_x, centro_z, tamano, indice_arena, total_arenas):
@@ -68,14 +68,18 @@ def generar_paredes(centro_x, centro_z, tamano, indice_arena, total_arenas):
                    position=(fin_x - 0.1, y, pos_z), collider=None, rotation_y=-90, scale=(10, 10, 10), double_sided=True)
 
     # MAGIA DE OPTIMIZACIÓN: Fusionamos los 480 bloques de ladrillo en 1 sola malla 3D.
-    hijos = list(padre_paredes.children)
-    padre_paredes.flatten_strong()
-    
-    # Removemos los 480 objetos de Python para que no consuman CPU
-    from ursina import scene
-    for hijo in hijos:
-        if hijo in scene.entities:
-            scene.entities.remove(hijo)
+    if len(padre_paredes.children) > 0:
+        hijos = list(padre_paredes.children)
+        padre_paredes.flatten_strong()
+        
+        def limpiar_entidad(ent):
+            if ent in scene.entities:
+                scene.entities.remove(ent)
+            for c in ent.children:
+                limpiar_entidad(c)
+                
+        for hijo in hijos:
+            limpiar_entidad(hijo)
 
     # --- COLISIONADORES MASIVOS ---
     # En lugar de 480 colisionadores pequeños, creamos 6 cajas gigantes invisibles

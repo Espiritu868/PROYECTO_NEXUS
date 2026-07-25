@@ -3,10 +3,10 @@ from scripts.enemigo_base import EnemigoBase
 class VillanoL(EnemigoBase):
     def __init__(self, **kwargs):
         super().__init__(
-            # Usamos el modelo sano del jugador...
-            ruta_modelo='assets/modelos/character-j.fbx',
-            # ...pero le pegamos la textura del villano L
-            ruta_textura='assets/modelos/textures/texture-l.png',
+            ruta_modelo='',
+            ruta_textura='',
+            base_folder='assets/modelos/villians/mutant2/',
+            prefix='Meshy_AI_Knight_Mutant_Optimiz_biped_Animation_',
             **kwargs
         )
         self.vida = 100
@@ -19,8 +19,13 @@ class VillanoL(EnemigoBase):
         if time.time() - self.ultimo_ataque > self.tiempo_entre_ataques:
             self.ultimo_ataque = time.time()
             
-            # Pose de ataque (Levanta un solo brazo apuntando)
-            if not self.brazo_der.isEmpty(): self.brazo_der.setP(-90)
+            
+            # Pose de ataque
+            if self.actor:
+                self.cambiar_animacion('attack', loop=False)
+            else:
+                if not self.brazo_der.isEmpty(): self.brazo_der.setP(-90)
+            
             
             if not self.jugador_objetivo:
                 return

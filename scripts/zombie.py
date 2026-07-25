@@ -1,10 +1,12 @@
 from scripts.enemigo_base import EnemigoBase
 
 class Zombie(EnemigoBase):
-    def __init__(self, textura_zombie, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(
-            ruta_modelo='assets/modelos/character-j.fbx',
-            ruta_textura=textura_zombie,
+            ruta_modelo='',
+            ruta_textura='',
+            base_folder='assets/modelos/villians/mutant1/',
+            prefix='Meshy_AI_Rock_Mutant_Optimized_biped_Animation_',
             **kwargs
         )
         self.vida = 80
@@ -21,5 +23,9 @@ class Zombie(EnemigoBase):
             self.frenesi = True
             self.velocidad = self.velocidad_normal * 2.5 
             
-            # Efecto visual de furia (Usamos set_color_scale para no borrar la textura)
-            self.modelo_visual.set_color_scale((1, 0.4, 0.4, 1))
+            
+            # Efecto visual de furia (Usamos set_color_scale)
+            if self.actor:
+                self.actor.setColorScale(1, 0.4, 0.4, 1)
+            else:
+                self.modelo_visual.set_color_scale((1, 0.4, 0.4, 1))

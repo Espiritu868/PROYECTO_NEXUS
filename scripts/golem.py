@@ -5,107 +5,123 @@ class GolemBoss(Entity):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        # --- CARGA DEL MODELO ANIMADO DEL CREATURE PACK ---
-        # Usamos Actor de Panda3D mapeando múltiples animaciones
-        ruta_base = "assets/modelos/villians/golem/Creature Pack/"
-        ruta_animaciones = "assets/modelos/villians/golem/5000_Faces/"
+        # --- CARGA DEL MODELO ANIMADO GLB ---
+        ruta_base = "assets/modelos/villians/golem/"
         
         self.modelo_visual = Entity(parent=self)
         
         try:
+            # Usamos golem_walk.glb como base (contiene malla y esqueleto)
+            # Y mapeamos las animaciones desde los otros archivos
             self.actor = Actor(
-                ruta_base + "cuerpo_base.egg",
+                ruta_base + "golem_walk.glb",
                 {
-                    'idle': ruta_animaciones + 'Walk Backward.egg',
-                    'walk': ruta_animaciones + 'Walk Backward.egg',
-                    'run': ruta_animaciones + 'Walk Backward.egg',
-                    'punch': ruta_animaciones + 'Walk Backward.egg',
-                    'die': ruta_animaciones + 'Walk Backward.egg'
+                    'idle': ruta_base + 'golem_idle.glb',
+                    'walk': ruta_base + 'golem_walk.glb',
+                    'run': ruta_base + 'golem_run.glb',
+                    'attack': ruta_base + 'golem_attack.glb',
+                    'arise': ruta_base + 'golem_arise.glb'
                 }
             )
             self.actor.reparentTo(self.modelo_visual)
             
-            # El modelo .egg de Mixamo está desplazado 100 unidades hacia adelante.
-            # Lo centramos manualmente a (0,0,0) antes de escalarlo.
-            self.actor.setPos(2.09, -100.24, 9.64)
-            
+            # Animación inicial
             self.actor.loop('idle')
             self.estado_actual = 'idle'
+            
+            # Hacer que se vea más brillante (Multiplicamos los colores x1.5)
+            self.actor.setColorScale(1.5, 1.5, 1.5, 1)
+            
         except Exception as e:
             print(f"=================================")
-            print(f"ERROR CARGANDO EL GLB: {e}")
+            print(f"ERROR CARGANDO EL GOLEM GLB: {e}")
             print(f"=================================")
             self.actor = None
             self.modelo_visual.model = 'cube'
             self.modelo_visual.color = color.red
             self.estado_actual = 'error'
         
-        # Restablecemos la escala normal. Si el golem es invisible porque mide 2 cm,
-        # esto lo hará visible. Si el EGG está en centímetros, esto lo hará de 2.2 metros (un poco más grande que el jugador).
-        self.modelo_visual.scale = 2.2
-        
-        # dae2egg ya corrige el eje Z arriba, así que solo rotamos en Y para que nos vea de frente.
+        # Rotamos para que nos vea de frente (Meshy suele exportar de espaldas o invertido)
         self.modelo_visual.rotation_y = 180
         
-        # Lo levantamos un poco para asegurarnos de que no esté bajo el piso
-        self.modelo_visual.y = 1
-            
-        # Hitbox masivo para el jefe. Usamos BoxCollider manual porque Ursina no sabe medir Actors de Panda3D automáticamente (eso causó el crash de LMatrix4)
+        # Hacemos al jefe masivo
+        self.modelo_visual.scale = 3.5
+        
+        # Hitbox masivo para el jefe
         from ursina import BoxCollider
-        self.collider = BoxCollider(self, center=Vec3(0, 2, 0), size=Vec3(4, 10, 4))
+        self.collider = BoxCollider(self, center=Vec3(0, 2.5, 0), size=Vec3(3, 5, 3))
         
-        self.vida = 1000
-        self.enabled = True
-        self.velocidad = 5
-        self.tiempo_vivo = 0
+        # --- SISTEMA DE COMBATE (VIDA Y DAÑO) ---
+        self.vida = 2500
+        self.vida_maxima = 2500
+        self.velocidad_caminar = 2.0
+        self.velocidad_correr = 5.0
+        self.rango_ataque = 5.0
+        self.tiempo_vivo = 0.0
+        self.ultimo_ataque = 0
+        self.tiempo_entre_ataques = 3.0
+        self.esta_muerto = False
         
+        # Barra de vida del Jefe UI
+        self.barra_vida_fondo = Entity(parent=self, model='quad', color=color.black, scale=(4, 0.4), y=6, billboard=True)
+        self.barra_vida_roja = Entity(parent=self.barra_vida_fondo, model='quad', color=color.red, scale=(1, 1), x=-0.5, origin=(-0.5, 0), z=-0.01)
+
     def recibir_dano(self, cantidad):
+        if self.esta_muerto:
+            return
+            
         self.vida -= cantidad
         
-        # Efecto visual de daño (se pinta rojo)
-        if self.actor:
-            self.actor.setColorScale(1, 0, 0, 1) 
-            
-            from ursina import invoke
-            def restaurar_color():
-                if self.actor:
-                    self.actor.clearColorScale()
-            invoke(restaurar_color, delay=0.1)
+        # Actualizar visualmente la barra
+        porcentaje = max(0, self.vida / self.vida_maxima)
+        self.barra_vida_roja.scale_x = porcentaje
+        
+        print(f"¡Golem dañado! Vida restante: {self.vida}")
         
         if self.vida <= 0:
-            destroy(self)
-            
-    def update(self):
-        self.tiempo_vivo += time.dt
+            self.morir()
+
+    def morir(self):
+        self.esta_muerto = True
+        print("¡El Golem ha caído!")
         
-        import main
+        from ursina import destroy, color
+        destroy(self.barra_vida_fondo)
+        
+        if self.actor:
+            # Usar la animación arise invertida si no hay una animación de muerte directa, o simplemente frenarlo
+            self.actor.stop()
+            self.actor.setColorScale(0.3, 0.3, 0.3, 1) # Se vuelve piedra grisácea
+            
+            # Secuencia de caída
+            self.animate_rotation_x(90, duration=1.0)
+            self.animate_y(self.y - 1, duration=1.0)
+            
+            # Desactivar colisiones para que el jugador pueda pasar por encima
+            if hasattr(self, 'collider') and self.collider:
+                self.collider.clear()
+
+
+    def update(self):
+        if self.esta_muerto:
+            return
+            
+        # IA Básica del Golem (Busca al jugador y lo ataca)     
+        if self.estado_actual == 'dead':
+            return
+            
+        # --- IA DEL GOLEM ---
+        import __main__ as main
         if hasattr(main, 'jugador_principal'):
             jugador = main.jugador_principal
             direccion = jugador.position - self.position
             direccion.y = 0 
+            distancia = direccion.length()
             
-            # Usamos look_at 3D bloqueando el eje Y para que no se incline al piso
             objetivo = Vec3(jugador.x, self.y, jugador.z)
             
-            if direccion.length() > 15:
-                # Muy lejos: Correr
-                if self.estado_actual != 'run' and self.actor:
-                    self.actor.loop('run')
-                    self.estado_actual = 'run'
-                self.position += direccion.normalized() * (self.velocidad * 1.5) * time.dt
-                self.look_at(objetivo)
-                
-            elif direccion.length() > 3:
-                # Cerca: Caminar hacia el jugador
-                if self.estado_actual != 'walk' and self.actor:
-                    self.actor.loop('walk')
-                    self.estado_actual = 'walk'
-                self.position += direccion.normalized() * self.velocidad * time.dt
-                self.look_at(objetivo)
-                
-            else:
-                # Muy cerca: Atacar (Punch)
-                if self.estado_actual != 'punch' and self.actor:
-                    self.actor.loop('punch')
-                    self.estado_actual = 'punch'
+            # Atacar si está lo suficientemente cerca
+            if distancia < self.rango_ataque:
+                if self.estado_actual != 'attack':
+                    self.estado_actual = 'attack'
                 self.look_at(objetivo)

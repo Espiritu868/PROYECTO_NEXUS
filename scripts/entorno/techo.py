@@ -1,4 +1,4 @@
-from ursina import Entity
+from ursina import Entity, scene
 
 def generar_techo(centro_x, centro_z, tamano, indice_arena=0):
     # Usamos baldosas gigantes para evitar miles de objetos (optimización de FPS)
@@ -45,5 +45,18 @@ def generar_techo(centro_x, centro_z, tamano, indice_arena=0):
                     scale=escala_techo, 
                     collider=None
                 )
+
+    if len(padre_techo.children) > 0:
+        hijos = list(padre_techo.children)
+        padre_techo.flatten_strong()
+        
+        def limpiar_entidad(ent):
+            if ent in scene.entities:
+                scene.entities.remove(ent)
+            for c in ent.children:
+                limpiar_entidad(c)
+                
+        for hijo in hijos:
+            limpiar_entidad(hijo)
 
     return padre_techo

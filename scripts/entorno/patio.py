@@ -1,4 +1,4 @@
-from ursina import Entity, color, BoxCollider
+from ursina import Entity, color, BoxCollider, scene
 import random
 import time
 
@@ -25,7 +25,7 @@ def generar_patio_global(num_arenas, offset_z, tamano_arena):
     centro_z = (z_inicio + z_fin) / 2
     Entity(parent=padre_patio, model='cube', position=(0, -0.5, centro_z), scale=(ancho_patio, 1, largo_total), collider='box', visible=False)
     
-    import main
+    import __main__ as main
     if not hasattr(main, 'patio_chunks'):
         main.patio_chunks = []
         
@@ -53,8 +53,20 @@ def generar_patio_global(num_arenas, offset_z, tamano_arena):
                     collider=None 
                 )
                 
-        # Usamos combine nativo de Ursina para reducir llamadas de dibujo (draw calls)
-        chunk.combine(auto_destroy=True)
+        # Fusionamos usando flatten_strong de Panda3D para asegurar limpieza de memoria
+        if len(chunk.children) > 0:
+            hijos_chunk = list(chunk.children)
+            chunk.flatten_strong()
+            
+            def limpiar_entidad(ent):
+                if ent in scene.entities:
+                    scene.entities.remove(ent)
+                for c in ent.children:
+                    limpiar_entidad(c)
+                    
+            for hijo in hijos_chunk:
+                limpiar_entidad(hijo)
+                
         # RE-APLICAMOS LA TEXTURA AL CHUNK COMBINADO PARA EVITAR QUE SE VEA BLANCO
         chunk.texture = textura_patio
 
@@ -75,6 +87,8 @@ def generar_patio_global(num_arenas, offset_z, tamano_arena):
     ]
     
     cantidad_decoraciones = 400
+    padre_decoraciones_patio = Entity(parent=padre_patio)
+    
     for _ in range(cantidad_decoraciones):
         dx = random.uniform(-ancho_patio/2 + 20, ancho_patio/2 - 20)
         dz = random.uniform(z_inicio + 20, z_fin - 20)
@@ -91,7 +105,7 @@ def generar_patio_global(num_arenas, offset_z, tamano_arena):
             modelo = random.choice(modelos_decoracion)
             escala = random.uniform(4, 9) 
             e = Entity(
-                parent=padre_patio,
+                parent=padre_decoraciones_patio,
                 model=modelo,
                 texture=textura_patio,
                 position=(dx, -0.5, dz),
@@ -102,6 +116,20 @@ def generar_patio_global(num_arenas, offset_z, tamano_arena):
             if 'dirt' not in modelo:
                 # Cajas de colisión un 50% más delgadas para no atorar al jugador
                 e.collider = BoxCollider(e, center=(0, 0.5, 0), size=(0.5, 1, 0.5))
+                
+    # Optimizamos las 400 decoraciones fusionando su geometría
+    if len(padre_decoraciones_patio.children) > 0:
+        hijos_dec = list(padre_decoraciones_patio.children)
+        padre_decoraciones_patio.flatten_strong()
+        
+        def limpiar_entidad(ent):
+            if ent in scene.entities:
+                scene.entities.remove(ent)
+            for c in ent.children:
+                limpiar_entidad(c)
+                
+        for hijo in hijos_dec:
+            limpiar_entidad(hijo)
             
     print(f"Patio generado en {round(time.time() - tiempo_inicio, 2)} segundos.")
     return padre_patio

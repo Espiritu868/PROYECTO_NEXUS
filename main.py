@@ -1,4 +1,4 @@
-from ursina import Ursina, DirectionalLight, AmbientLight, color, window, application, scene
+from ursina import Ursina, DirectionalLight, AmbientLight, color, window, application, scene, Entity, Text, camera, invoke, destroy
 import random
 
 # --- PARCHE PARA MODELOS GLB EXTERNOS ---
@@ -22,7 +22,7 @@ from scripts.escenario import CoordinadorEscenario
 from scripts.jugador import Jugador
 from scripts.villano_l import VillanoL
 from scripts.villano_o import VillanoO
-from scripts.zombie import Zombie
+from scripts.zombie import Zombie   
 from scripts.gestor_arena import GestorArena
 
 app = Ursina(title="Proyecto Nexo - Nivel 0")
@@ -30,7 +30,6 @@ window.fullscreen = True
 window.vsync = False # Desbloquea los FPS por encima de 60
 
 # --- ATMÓSFERA DE TERROR TÁCTICO (DARKNESS) ---
-from ursina import application, AmbientLight, DirectionalLight, color, scene
 # Iluminación MUY tenue. El jugador dependerá de su linterna.
 AmbientLight(color=color.rgba(20, 20, 25, 255)) 
 DirectionalLight(y=2, z=3, shadows=False, color=color.rgba(10, 15, 30, 255))
@@ -46,75 +45,148 @@ window.color = color_bruma
 scene.fog_density = (15, 100)
 scene.fog_color = color_bruma
 
-# Generar el escenario
-coordinador = CoordinadorEscenario()
-coordinador.construir_nivel_base()
-
-# Instanciar al jugador (Lo soltamos un poco arriba en Y=10 para que caiga y toque el suelo)
-jugador_principal = Jugador(position=(0, 10, 0))
-
-# --- GENERACIÓN DE VILLANOS Y SISTEMA DE ARENAS ---
+# --- PANTALLA DE CARGA (LOADING SCREEN) ---
+carga_terminada = False
+jugador_principal = None
+coordinador = None
 gestores_arena = []
 
-for indice in range(coordinador.num_arenas):
-    coordinador.generar_arena_individual(indice)
+from ursina import load_texture, Entity, Text, color
+from direct.gui.OnscreenImage import OnscreenImage
+from panda3d.core import TransparencyAttrib
+import random
+
+from direct.gui.OnscreenImage import OnscreenImage
+from panda3d.core import TransparencyAttrib
+import time
+
+lista_imagenes = [
+    f'scripts/backgrounds/back{i}.png' for i in range(1, 6)
+]
+imagen_actual = random.choice(lista_imagenes)
+
+# Usamos OnscreenImage nativo de Panda3D para el fondo, anclado a render2d (-1 a 1)
+# para que cubra la pantalla perfecta y exactamente, sin ningún zoom.
+pantalla_carga = OnscreenImage(image=imagen_actual, parent=application.base.render2d)
+pantalla_carga.setTransparency(TransparencyAttrib.MAlpha)
+
+# Las coordenadas de render2d van de -1 a 1. Escala (1,1,1) cubre toda la pantalla.
+pantalla_carga.setScale(1, 1, 1)
+
+# Para que renderice detrás de la UI de Ursina (como la barra de carga)
+pantalla_carga.setBin("background", 10)
+
+# Mantenemos solo el fondo de pantalla (sin barra de progreso extra)
+
+def actualizar_loading(porcentaje, mensaje="Cargando..."):
+    # Cambiar imagen aleatoria para el slideshow
+    nueva_img = random.choice(lista_imagenes)
+    pantalla_carga.setImage(nueva_img)
+    pantalla_carga.setTransparency(TransparencyAttrib.MAlpha)
     
-    centro_arena_x = 0
-    centro_arena_z = indice * coordinador.offset_z
-    
-    enemigos_arena = []
-    
-    if indice == 0:
-        # --- SPAWN DEL JEFE (ARENA 0) ---
-        from scripts.golem import GolemBoss
-        # Lo ponemos más cerca (z + 40) para que no lo oculte la oscuridad total (100m)
-        jefe = GolemBoss(position=(centro_arena_x, 0, centro_arena_z + 40))
-        enemigos_arena.append(jefe)
+    # Forzar al motor a dibujar este frame inmediatamente en la pantalla
+    application.base.graphicsEngine.renderFrame()
+    application.base.graphicsEngine.renderFrame()
+    time.sleep(0.8) # Pausa artificial para que se alcance a ver la imagen y el progreso
+
+def self_destruct():
+    if carga_terminada:
+        from ursina import destroy
+        if pantalla_carga:
+            pantalla_carga.destroy()
         
-        # También le ponemos 2 zombies como esbirros
-        enemigos_arena.append(Zombie(textura_zombie='assets/modelos/textures/texture-l.png', position=(centro_arena_x - 15, 0, centro_arena_z + 40)))
-        enemigos_arena.append(Zombie(textura_zombie='assets/modelos/textures/texture-o.png', position=(centro_arena_x + 15, 0, centro_arena_z + 40)))
-    else:
-        # --- SPAWN NORMAL (OTRAS ARENAS) ---
+        # Activar la interfaz del jugador ahora que terminó la carga
+        if jugador_principal:
+            jugador_principal.mira.enabled = True
+            jugador_principal.barra_vida_bg.enabled = True
+            jugador_principal.texto_vida.enabled = True
+            jugador_principal.radar_bg.enabled = True
+
+# Usar el sistema de tareas de Panda3D para verificar la destrucción
+def check_destruct(task):
+    if carga_terminada:
+        self_destruct()
+        return task.done
+    return task.cont
+application.base.taskMgr.add(check_destruct, 'destruct_loading_screen')
+
+def iniciar_carga_pesada():
+    global carga_terminada, jugador_principal, coordinador, gestores_arena
+    
+    actualizar_loading(0.1, "Generando masivo patio exterior...")
+    coordinador = CoordinadorEscenario()
+    coordinador.construir_nivel_base()
+         
+    actualizar_loading(0.3, "Invocando al Jugador Principal...")
+    jugador_principal = Jugador(position=(0, 10, 0))
+    
+    # Ocultar la interfaz del jugador temporalmente para que no estorbe en la pantalla de carga
+    jugador_principal.mira.enabled = False
+    jugador_principal.barra_vida_bg.enabled = False
+    jugador_principal.texto_vida.enabled = False
+    jugador_principal.radar_bg.enabled = False
+    
+    # --- GENERACIÓN DE VILLANOS Y SISTEMA DE ARENAS ---
+    for indice in range(coordinador.num_arenas):
+        progreso = 0.3 + (0.7 * (indice / coordinador.num_arenas))
+        actualizar_loading(progreso, f"Construyendo y fortificando Arena {indice}...")
+        
+        coordinador.generar_arena_individual(indice)
+        
+        centro_arena_x = 0
+        centro_arena_z = indice * coordinador.offset_z
+        jefe_asignado = None
+        
+        if indice == 0:
+            from scripts.golem import GolemBoss
+            jefe_asignado = GolemBoss
+            
+        elif indice == 1:
+            from scripts.knight import KnightBoss
+            jefe_asignado = KnightBoss
+            
+        elif indice == 2:
+            from scripts.witch import BrujaBoss
+            jefe_asignado = BrujaBoss
+            
+        elif indice == 3:
+            from scripts.dragon import DragonBoss
+            jefe_asignado = DragonBoss
+            
         cantidad_enemigos = 4 + (indice * 3)
-        for _ in range(cantidad_enemigos):
-            offset_x = random.choice([random.randint(-150, -50), random.randint(50, 150)])
-            offset_z = random.randint(-150, 150)
             
-            posicion_aleatoria = (centro_arena_x + offset_x, 0, centro_arena_z + offset_z)
-            rotacion_aleatoria = random.randint(0, 360) 
-            
-            tipo_enemigo = random.choice(['l', 'o', 'zombie'])
-            if tipo_enemigo == 'zombie':
-                textura_z = random.choice(['assets/modelos/textures/texture-l.png', 'assets/modelos/textures/texture-o.png'])
-                enemigo = Zombie(textura_zombie=textura_z, position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
-            elif tipo_enemigo == 'l':
-                enemigo = VillanoL(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
-            else:
-                enemigo = VillanoO(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
-                
-            enemigos_arena.append(enemigo)
+        puertas_f = coordinador.puertas_frente_por_arena[indice]
+        puertas_a = coordinador.puertas_atras_por_arena[indice]
         
-    puertas_f = coordinador.puertas_frente_por_arena[indice]
-    puertas_a = coordinador.puertas_atras_por_arena[indice]
-    
-    gestor = GestorArena(
-        enemigos=enemigos_arena, 
-        puertas_frente=puertas_f,
-        puertas_atras=puertas_a,
-        limite_z=centro_arena_z - 200, # Entrada a la arena
-        indice_arena=indice
-    )
-    gestores_arena.append(gestor)
+        gestor = GestorArena(
+            jefe_class=jefe_asignado,
+            cantidad_enemigos=cantidad_enemigos,
+            centro_x=centro_arena_x,
+            centro_z=centro_arena_z,
+            puertas_frente=puertas_f,
+            puertas_atras=puertas_a,
+            limite_z=centro_arena_z - 200, # Entrada a la arena
+            indice_arena=indice
+        )
+        gestores_arena.append(gestor)
+
+    actualizar_loading(1.0, "¡Listos para el combate!")
+    carga_terminada = True
+
+if __name__ == '__main__':
+    # Ejecutamos la carga de modelos sincrónicamente, pero usando nuestro renderFrame para el slideshow
+    iniciar_carga_pesada()
 
 # Engine Loop: Evaluamos la generación de arenas y la distancia de renderizado (Culling)
 def update():
+    if not carga_terminada:
+        return
+        
     z_jugador = jugador_principal.z
     
     # Render Distance (Estilo Minecraft) para los chunks masivos del patio
-    import main
-    if hasattr(main, 'patio_chunks'):
-        for chunk in main.patio_chunks:
+    if 'patio_chunks' in globals():
+        for chunk in globals()['patio_chunks']:
             # Rango visual configurado a 1000 metros
             if abs(chunk.z - z_jugador) > 1000:
                 chunk.visible = False
@@ -145,13 +217,11 @@ def update():
         else:
             for enemigo in gestor.enemigos:
                 if not enemigo.enabled: enemigo.enabled = True
-                
-    # Streaming de seguridad eliminado, ya están generadas.
-
 
 # Tecla de escape de emergencia (Ya que el ratón estará bloqueado en la ventana)
 def input(key):
     if key == 'escape':
         application.quit()
 
-app.run()
+if __name__ == '__main__':
+    app.run()

@@ -1,0 +1,1 @@
+DEBUG PANTALLA CARGA:\n - Textura Original: 2752x1536 px\n - Aspect Ratio Pantalla (Ursina): 1.6\n - Scale Base Sprite: Vec3(27.519998, 15.36, 1)\n - Factor de Correccion: 0.058139534883720936\n - Scale Final Aplicado: (1.5999999157218048, 0.8930232358533283)\n

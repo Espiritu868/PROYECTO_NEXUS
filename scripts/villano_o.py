@@ -3,10 +3,10 @@ from scripts.enemigo_base import EnemigoBase
 class VillanoO(EnemigoBase):
     def __init__(self, **kwargs):
         super().__init__(
-            # Usamos el modelo sano del jugador...
-            ruta_modelo='assets/modelos/character-j.fbx',
-            # ...pero le pegamos la textura del villano O
-            ruta_textura='assets/modelos/textures/texture-o.png',
+            ruta_modelo='',
+            ruta_textura='',
+            base_folder='assets/modelos/villians/mutant3/',
+            prefix='Meshy_AI_Orion_Sys_Ice_Mutant__biped_Animation_',
             **kwargs
         )
         self.vida = 250
@@ -31,7 +31,10 @@ class VillanoO(EnemigoBase):
             if time.time() - self.temporizador_embestida > 5:
                 self.preparando = True
                 self.velocidad = 0 # Se detiene para cargar el ataque
-                self.modelo_visual.set_color_scale((1, 0, 0, 1)) # Rojo puro
+                if self.actor:
+                    self.actor.setColorScale(1, 0, 0, 1) # Rojo puro
+                else:
+                    self.modelo_visual.set_color_scale((1, 0, 0, 1)) # Rojo puro
                 invoke(self.iniciar_embestida, delay=1.0) # Tarda 1 segundo en cargar
                 
     def iniciar_embestida(self):
@@ -47,6 +50,9 @@ class VillanoO(EnemigoBase):
     def terminar_embestida(self):
         from ursina import color, time
         self.embistiendo = False
-        self.velocidad = self.velocidad_normal
-        self.modelo_visual.set_color_scale((1, 1, 1, 1)) # Color normal
+        self.temporizador_embestida = time.time()
+        if self.actor:
+            self.actor.setColorScale(1, 1, 1, 1) # Vuelve al color normal
+        else:
+            self.modelo_visual.set_color_scale((1, 1, 1, 1)) # Vuelve al color normal
         self.temporizador_embestida = time.time()

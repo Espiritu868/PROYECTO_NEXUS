@@ -2,33 +2,48 @@ from ursina import Entity, load_texture, time, Vec3, raycast, distance, scene, c
 import math
 
 class EnemigoBase(Entity):
-    def __init__(self, ruta_modelo, ruta_textura, **kwargs):
+    def __init__(self, ruta_modelo, ruta_textura, base_folder='', prefix='', **kwargs):
         super().__init__(**kwargs)
         
-        # --- DIBUJADO CRUDO ---
-        self.modelo_visual = Entity(
-            parent=self,
-            model=ruta_modelo, 
-            scale=(0.01, 0.01, 0.01),
-            rotation_y=180 # Alineado con la rotación del FBX original (igual que el jugador)
-        )
+        # --- SISTEMA DE ANIMACIÓN ACTOR PANDA3D ---
+        from direct.actor.Actor import Actor
         
-        # --- EL RAYO LÁSER TEXTURIZADOR (OVERRIDE) ---
-        if ruta_textura:
-            textura_real = load_texture(ruta_textura)
-            if textura_real:
-                # Forzamos la textura para evitar que salgan blancos
-                self.modelo_visual.set_texture(textura_real._texture, 1)
-            else:
-                print(f"❌ Advertencia: No se encontró la textura en {ruta_textura}")
+        if base_folder and prefix:
+            self.actor = Actor(
+                base_folder + prefix + 'Axe_Breathe_and_Look_Around_withSkin.glb',
+                {
+                    'idle': base_folder + prefix + 'Axe_Breathe_and_Look_Around_withSkin.glb',
+                    'walk': base_folder + prefix + 'Walking_withSkin.glb',
+                    'run': base_folder + prefix + 'Running_withSkin.glb',
+                    'run_fast': base_folder + prefix + 'run_fast_8_withSkin.glb',
+                    'attack': base_folder + prefix + 'Left_Hook_from_Guard_withSkin.glb',
+                    'pain': base_folder + prefix + 'Head_Hold_in_Pain_withSkin.glb',
+                    'die': base_folder + prefix + 'Zombie_Scream_withSkin.glb'
+                }
+            )
+            # Vincular el Actor a esta Entidad de Ursina
+            self.actor.reparentTo(self)
+            self.actor.setScale(1.5) # Escala base al tamaño del jugador
+            self.actor.setH(180) # Rotar 180 grados igual que el modelo antiguo
             
-        # --- EXTREMIDADES PARA ANIMACIÓN ---
-        # Buscamos las piezas del modelo (los villanos usan el mismo FBX que el jugador)
-        self.pierna_izq = self.modelo_visual.find('**/leg-left')
-        self.pierna_der = self.modelo_visual.find('**/leg-right')
-        self.brazo_izq = self.modelo_visual.find('**/arm-left')
-        self.brazo_der = self.modelo_visual.find('**/arm-right')
-        self.torso = self.modelo_visual.find('**/torso')
+            # --- OPTIMIZACIÓN: Pre-cargar animaciones ---
+            try:
+                for anim in ['walk', 'run', 'run_fast', 'attack', 'pain', 'die']:
+                    self.actor.getAnimControl(anim)
+            except:
+                pass
+            
+            # Estado inicial
+            self.estado_animacion = 'idle'
+            self.actor.loop('idle')
+        else:
+            # Fallback en caso de que un jefe siga usando el sistema viejo
+            self.actor = None
+            self.modelo_visual = Entity(parent=self, model=ruta_modelo, scale=0.01, rotation_y=180)
+            if ruta_textura:
+                t = load_texture(ruta_textura)
+                if t: self.modelo_visual.set_texture(t._texture, 1)
+
             
         # --- COLISIONADOR ---
         from ursina import BoxCollider
@@ -74,6 +89,13 @@ class EnemigoBase(Entity):
         
         self.curando = False
         self.curado = False
+        
+        self.ultimo_tiempo_esquiva = 0
+        self.direccion_esquiva = 0
+        
+        # Optimización: Reducir raycasts
+        self.tiempo_ultimo_raycast = 0
+        self.obstaculo_enfrente = False
 
     def buscar_jugador(self):
         # Importación local para evitar importaciones circulares
@@ -83,19 +105,19 @@ class EnemigoBase(Entity):
                 return e
         return None
 
+    def cambiar_animacion(self, anim, loop=True):
+        if self.actor and self.estado_animacion != anim:
+            self.estado_animacion = anim
+            if loop:
+                self.actor.loop(anim)
+            else:
+                self.actor.play(anim)
+
     def update(self):
         if self.curando and not self.curado:
-            # Mientras está flotando, no hace nada
             return
         elif self.curado:
-            # Ya es un ciudadano sano, solo respira suavemente
-            t = time.time() * 2
-            if not self.brazo_izq.isEmpty():
-                self.brazo_izq.setP(math.sin(t) * 5)
-                self.brazo_der.setP(-math.sin(t) * 5)
-                self.pierna_izq.setP(0)
-                self.pierna_der.setP(0)
-                self.torso.setP(0)
+            self.cambiar_animacion('idle')
             return
 
         # Buscar jugador si no lo tenemos aún
@@ -111,15 +133,15 @@ class EnemigoBase(Entity):
 
         dist_jugador = distance(self, self.jugador_objetivo)
         
-        # --- FÍSICAS DE GRAVEDAD ---
-        self.velocidad_y -= self.gravedad * time.dt
-        hit_info = raycast(self.position + Vec3(0, 1.5, 0), direction=(0, -1, 0), ignore=(self,))
-        
-        if hit_info.hit and hit_info.distance <= (1.6 - (self.velocidad_y * time.dt)):
-            self.y = hit_info.world_point.y
+        # --- FÍSICAS DE GRAVEDAD OPTIMIZADAS ---
+        # Eliminamos el costoso raycast() por cada frame por cada enemigo.
+        # Ya que las arenas son planas en y=0, simplemente chocamos matemáticamente con el suelo.
+        if self.y <= 0 and self.velocidad_y <= 0:
+            self.y = 0
             self.velocidad_y = 0
             self.en_suelo = True
         else:
+            self.velocidad_y -= self.gravedad * time.dt
             self.y += self.velocidad_y * time.dt
             self.en_suelo = False
             
@@ -133,48 +155,64 @@ class EnemigoBase(Entity):
             # Comportamiento dependiendo de la distancia
             if dist_jugador > self.distancia_ataque:
                 # 1. Caminar hacia el jugador
-                # Revisar si hay un obstáculo enfrente para saltar
-                obstaculo = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=2, ignore=(self, self.jugador_objetivo))
                 
-                if obstaculo.hit and self.en_suelo:
-                    # Saltar obstáculo
-                    self.velocidad_y = self.velocidad_salto
-                    self.en_suelo = False
+                # OPTIMIZACIÓN DE RAYCAST: Solo revisar obstáculos 5 veces por segundo, no 60.
+                if time.time() - self.tiempo_ultimo_raycast > 0.2:
+                    self.tiempo_ultimo_raycast = time.time()
+                    hit_obstaculo = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=2, ignore=(self, self.jugador_objetivo))
+                    self.obstaculo_enfrente = hit_obstaculo.hit and hit_obstaculo.distance <= 0.5
+                    
+                    if hit_obstaculo.hit and self.en_suelo:
+                        # Saltar obstáculo
+                        self.velocidad_y = self.velocidad_salto
+                        self.en_suelo = False
                 
-                # Moverse hacia adelante si no hay pared frente a su cara
-                if not obstaculo.hit or obstaculo.distance > 0.5:
-                    self.position += self.forward * self.velocidad * time.dt
-                    en_movimiento = True
+                # MICRO-PAUSA POST ATAQUE: Si acaba de atacar, se queda quieto 1 segundo
+                if time.time() - self.ultimo_ataque > 1.0:
+                    # Moverse hacia adelante si no hay pared frente a su cara
+                    if not self.obstaculo_enfrente:
+                        self.position += self.forward * self.velocidad * time.dt
+                        en_movimiento = True
+                        
+                        # IA: ESQUIVA ALEATORIA (DASH LATERAL)
+                        # Cada 3 segundos, tiene un 30% de probabilidad de hacer un dash a un lado
+                        if time.time() - self.ultimo_tiempo_esquiva > 3.0:
+                            import random
+                            self.ultimo_tiempo_esquiva = time.time()
+                            if random.random() < 0.3:
+                                self.direccion_esquiva = random.choice([-1, 1])
+                            else:
+                                self.direccion_esquiva = 0
+                                
+                        # Aplicar esquiva si está activa
+                        if time.time() - self.ultimo_tiempo_esquiva < 0.5 and self.direccion_esquiva != 0:
+                            # Se mueve hacia los lados (self.right) a gran velocidad
+                            self.position += self.right * (self.velocidad * 2.5) * self.direccion_esquiva * time.dt
             else:
                 # 2. Atacar al jugador
                 self.atacar()
                 
         # --- ANIMACIONES PROCEDIMENTALES ---
-        # Si acaba de atacar, evitamos sobreescribir la pose de ataque un par de frames
-        if time.time() - self.ultimo_ataque < 0.2:
-            pass # Mantiene la pose de ataque
-        elif self.en_suelo:
-            if en_movimiento:
-                # Animación de caminar
-                frecuencia = 10
-                amplitud = 25
-                t = time.time() * frecuencia
-                if not self.pierna_izq.isEmpty(): self.pierna_izq.setP(math.sin(t) * amplitud)
-                if not self.pierna_der.isEmpty(): self.pierna_der.setP(-math.sin(t) * amplitud)
-                if not self.brazo_izq.isEmpty(): self.brazo_izq.setP(-math.sin(t) * amplitud)
-                if not self.brazo_der.isEmpty(): self.brazo_der.setP(math.sin(t) * amplitud)
+        if self.actor:
+            if time.time() - self.ultimo_ataque < 1.0:
+                # Mantener animación de ataque
+                pass
+            elif self.en_suelo:
+                if en_movimiento:
+                    # Dependiendo de la velocidad, elige caminar o correr
+                    if self.velocidad > 15:
+                        self.cambiar_animacion('run_fast')
+                    elif self.velocidad > 6:
+                        self.cambiar_animacion('run')
+                    else:
+                        self.cambiar_animacion('walk')
+                else:
+                    self.cambiar_animacion('idle')
             else:
-                # Pose de descanso
-                if not self.pierna_izq.isEmpty(): self.pierna_izq.setP(0)
-                if not self.pierna_der.isEmpty(): self.pierna_der.setP(0)
-                if not self.brazo_izq.isEmpty(): self.brazo_izq.setP(0)
-                if not self.brazo_der.isEmpty(): self.brazo_der.setP(0)
+                self.cambiar_animacion('idle') # O alguna pose de salto si hubiera
         else:
-            # Animación de salto
-            if not self.pierna_izq.isEmpty(): self.pierna_izq.setP(-20)
-            if not self.pierna_der.isEmpty(): self.pierna_der.setP(-20)
-            if not self.brazo_izq.isEmpty(): self.brazo_izq.setP(15)
-            if not self.brazo_der.isEmpty(): self.brazo_der.setP(15)
+            # Fallback para sistema viejo
+            pass
 
     def recibir_dano(self, cantidad):
         if self.curando:
@@ -184,6 +222,10 @@ class EnemigoBase(Entity):
             self.vida_maxima = max(1, self.vida) # Captura la vida máxima inicial
             
         self.vida -= cantidad
+        
+        if self.actor:
+            self.cambiar_animacion('pain', loop=False)
+            self.ultimo_ataque = time.time() # Reusamos este timer para que no sobreescriba la animación de dolor
         
         # --- KNOCKBACK (EMPUJE FÍSICO) ---
         if self.jugador_objetivo:
@@ -210,14 +252,19 @@ class EnemigoBase(Entity):
         texturas_civiles = ['a','b','c','d','e','f','g','h','i','j','k','m','n','p','q','r']
         textura_elegida = random.choice(texturas_civiles)
         tex = load_texture(f'assets/modelos/textures/texture-{textura_elegida}.png')
-        if tex:
-            self.modelo_visual.set_texture(tex._texture, 1)
+        
+        if self.actor:
+            # Los mutantes GLB no pueden cambiar de textura tan fácil por sus UVs complejos
+            # Así que los dejamos amarillos o los ocultamos (hacemos que desaparezcan)
+            self.actor.setColorScale(1, 1, 1, 1)
+        else:
+            if tex:
+                self.modelo_visual.set_texture(tex._texture, 1)
+            # Devolver el color a normal
+            self.modelo_visual.color = color.white
         
         # Volver al piso
         self.animate_y(self.y - 3, duration=0.5)
-        
-        # Devolver el color a normal
-        self.modelo_visual.color = color.white
         
         self.curado = True
 
@@ -232,10 +279,15 @@ class EnemigoBase(Entity):
         from ursina import destroy, color
         destroy(self.barra_vida_fondo)
         
-        # Animación de curación celestial
+        if self.actor:
+            self.cambiar_animacion('die', loop=False)
+            self.actor.setColorScale(1, 1, 0, 1) # Amarillo estático
+        else:
+            self.modelo_visual.animate_color(color.yellow, duration=1.5)
+        
+        # Secuencia de curación (flotar hacia el cielo y brillar)
         self.animate_rotation_y(self.rotation_y + 1080, duration=1.5)
         self.animate_y(self.y + 3, duration=1.5)
-        self.modelo_visual.animate_color(color.yellow, duration=1.5)
         
         from ursina import Sequence, Func, Wait
         Sequence(
@@ -247,7 +299,11 @@ class EnemigoBase(Entity):
         if time.time() - self.ultimo_ataque > self.tiempo_entre_ataques:
             # Dañar al jugador
             if self.jugador_objetivo:
-                self.jugador_objetivo.vida -= 10
+                if hasattr(self.jugador_objetivo, 'recibir_dano'):
+                    self.jugador_objetivo.recibir_dano(10)
+                else:
+                    self.jugador_objetivo.vida -= 10
+                    
                 self.jugador_objetivo.texto_vida.text = f'SALUD: {self.jugador_objetivo.vida}'
                 
                 if self.jugador_objetivo.vida < 40:
@@ -262,5 +318,8 @@ class EnemigoBase(Entity):
             self.ultimo_ataque = time.time()
             
             # Pose de ataque rápida (levanta los brazos)
-            if not self.brazo_izq.isEmpty(): self.brazo_izq.setP(-60)
-            if not self.brazo_der.isEmpty(): self.brazo_der.setP(-60)
+            if self.actor:
+                self.cambiar_animacion('attack', loop=False)
+            else:
+                if not self.brazo_izq.isEmpty(): self.brazo_izq.setP(-60)
+                if not self.brazo_der.isEmpty(): self.brazo_der.setP(-60)

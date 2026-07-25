@@ -1,4 +1,4 @@
-from ursina import Entity, BoxCollider
+from ursina import Entity, BoxCollider, scene
 
 def generar_decoracion(centro_x, centro_z, tamano, indice_arena=0):
     padre_decoracion = Entity()
@@ -42,13 +42,18 @@ def generar_decoracion(centro_x, centro_z, tamano, indice_arena=0):
             Entity(parent=padre_decoracion, model='assets/texturas/medieval/column-wood.glb', position=(px, 0, pz), scale=(10, 30, 10), collider='box')
 
         # Optimización extrema: Fusionar toda la geometría de árboles y cajas en 1 sola malla
-        hijos = list(padre_decoracion.children)
-        padre_decoracion.flatten_strong()
-        
-        from ursina import scene
-        for hijo in hijos:
-            if hijo in scene.entities:
-                scene.entities.remove(hijo)
+        if len(padre_decoracion.children) > 0:
+            hijos = list(padre_decoracion.children)
+            padre_decoracion.flatten_strong()
+            
+            def limpiar_entidad(ent):
+                if ent in scene.entities:
+                    scene.entities.remove(ent)
+                for c in ent.children:
+                    limpiar_entidad(c)
+                    
+            for hijo in hijos:
+                limpiar_entidad(hijo)
                 
         return padre_decoracion # Finalizamos aquí para que no se generen objetos industriales
 
@@ -123,12 +128,17 @@ def generar_decoracion(centro_x, centro_z, tamano, indice_arena=0):
            scale=6, collider='box', rotation_y=180)
 
     # Optimización extrema: Fusionar toda la geometría industrial en 1 sola malla
-    hijos = list(padre_decoracion.children)
-    padre_decoracion.flatten_strong()
-    
-    from ursina import scene
-    for hijo in hijos:
-        if hijo in scene.entities:
-            scene.entities.remove(hijo)
+    if len(padre_decoracion.children) > 0:
+        hijos = list(padre_decoracion.children)
+        padre_decoracion.flatten_strong()
+        
+        def limpiar_entidad(ent):
+            if ent in scene.entities:
+                scene.entities.remove(ent)
+            for c in ent.children:
+                limpiar_entidad(c)
+                
+        for hijo in hijos:
+            limpiar_entidad(hijo)
             
     return padre_decoracion

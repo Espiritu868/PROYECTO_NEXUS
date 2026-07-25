@@ -1,4 +1,4 @@
-from ursina import Entity, color
+from ursina import Entity, color, scene
 
 def generar_piso(centro_x, centro_z, tamano, indice_arena=0): 
     mitad = tamano // 2
@@ -39,5 +39,18 @@ def generar_piso(centro_x, centro_z, tamano, indice_arena=0):
                     collider='box',
                     scale=escala 
                 )
+
+    if len(padre_piso.children) > 0:
+        hijos = list(padre_piso.children)
+        padre_piso.flatten_strong()
+        
+        def limpiar_entidad(ent):
+            if ent in scene.entities:
+                scene.entities.remove(ent)
+            for c in ent.children:
+                limpiar_entidad(c)
+                
+        for hijo in hijos:
+            limpiar_entidad(hijo)
 
     return padre_piso
