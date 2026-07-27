@@ -1,4 +1,4 @@
-from ursina import Entity, scene
+from ursina import Entity, scene, color, load_texture
 
 def generar_techo(centro_x, centro_z, tamano, indice_arena=0):
     # Usamos baldosas gigantes para evitar miles de objetos (optimización de FPS)
@@ -14,37 +14,22 @@ def generar_techo(centro_x, centro_z, tamano, indice_arena=0):
     padre_techo = Entity()
     
     # Configuramos el modelo y textura del techo
-    if indice_arena == 1:
-        # Habitación medieval: USAMOS UN SOLO PLANO para 60FPS
-        Entity(
-            parent=padre_techo,
-            model='plane',
-            texture='assets/texturas/medieval/Textures/planks.png',
-            position=(centro_x, altura_techo, centro_z),
-            rotation_x=180, # Invertido para mirar abajo
-            scale=(tamano, 1, tamano),
-            texture_scale=(tamano/10, tamano/10),
-            collider=None
-        )
-    else:
-        # Fábrica: optimizado
-        tamano_baldosa = 100
-        modelo_techo = 'assets/texturas/factory/top-large.obj'
-        textura_techo = 'assets/texturas/factory/Textures/colormap.png'
-        # El modelo mide 2x2. Para cubrir 100x100, escalamos X y Z por 50. Mantenemos Y en 1.
-        escala_techo = (50, 1, 50)
-
-        for x in range(inicio_x, fin_x, tamano_baldosa):
-            for z in range(inicio_z, fin_z, tamano_baldosa):
-                Entity(
-                    parent=padre_techo,
-                    model=modelo_techo,
-                    texture=textura_techo,
-                    position=(x + (tamano_baldosa/2), altura_techo, z + (tamano_baldosa/2)),
-                    rotation_x=180, 
-                    scale=escala_techo, 
-                    collider=None
-                )
+    # Fábrica (Arena 0): TECHO DE CONCRETO
+    # Un solo cubo gigante mirando hacia abajo, usando la textura de concreto
+    textura_concreto = load_texture('assets/texturas/pared_concreto.png')
+    if textura_concreto: textura_concreto.filtering = 'mipmap'
+    
+    Entity(
+        parent=padre_techo,
+        model='cube',
+        texture=textura_concreto,
+        color=color.gray, 
+        position=(centro_x, altura_techo, centro_z),
+        rotation_x=180, 
+        scale=(tamano, 1, tamano),
+        texture_scale=(tamano/30, tamano/30), 
+        collider=None
+    )
 
     if len(padre_techo.children) > 0:
         hijos = list(padre_techo.children)

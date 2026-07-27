@@ -24,6 +24,7 @@ from scripts.villano_l import VillanoL
 from scripts.villano_o import VillanoO
 from scripts.zombie import Zombie   
 from scripts.gestor_arena import GestorArena
+from scripts.editor_nivel import EditorNivel
 
 app = Ursina(title="Proyecto Nexo - Nivel 0")
 window.fullscreen = True
@@ -120,6 +121,9 @@ def iniciar_carga_pesada():
     actualizar_loading(0.3, "Invocando al Jugador Principal...")
     jugador_principal = Jugador(position=(0, 10, 0))
     
+    # Inicializar el Editor de Niveles (F4 para abrir)
+    editor = EditorNivel(jugador_principal)
+    
     # Ocultar la interfaz del jugador temporalmente para que no estorbe en la pantalla de carga
     jugador_principal.mira.enabled = False
     jugador_principal.barra_vida_bg.enabled = False
@@ -140,23 +144,73 @@ def iniciar_carga_pesada():
         if indice == 0:
             from scripts.golem import GolemBoss
             jefe_asignado = GolemBoss
-            
-        elif indice == 1:
-            from scripts.knight import KnightBoss
-            jefe_asignado = KnightBoss
-            
-        elif indice == 2:
-            from scripts.witch import BrujaBoss
-            jefe_asignado = BrujaBoss
-            
-        elif indice == 3:
-            from scripts.dragon import DragonBoss
-            jefe_asignado = DragonBoss
-            
         cantidad_enemigos = 4 + (indice * 3)
             
         puertas_f = coordinador.puertas_frente_por_arena[indice]
         puertas_a = coordinador.puertas_atras_por_arena[indice]
+        
+        # ============================================================== #  
+        # SISTEMA DE MISIONES AGREGADO                                   #
+        from scripts.pieza import PiezaPortal
+        from scripts.gestor_portal import GestorPortal 
+        from scripts.grieta import Grieta
+
+        # El juego elige la misión al azar para esta arena
+        misiones_disponibles = ["RECOLECTAR", "SELLAR_GRIETAS"]
+        tipo_mision_elegida = random.choice(misiones_disponibles)
+
+        gestor_portal_arena = GestorPortal(
+            offset_z=coordinador.offset_z, 
+            tipo_mision=tipo_mision_elegida,
+            indice_arena=indice
+        )
+
+        #  SOLO generamos las piezas si la misión elegida es "RECOLECTAR"
+        if tipo_mision_elegida == "RECOLECTAR":
+            piezas_info = [
+                {"nombre": "Carcasa del Arma",  "modelo": "assets/modelos/carcasa_reducida.glb"},
+                {"nombre": "Pinzas Frontales",  "modelo": "assets/modelos/pinzas.glb"},
+                {"nombre": "Emisor portal",     "modelo": "assets/modelos/emisor_portal.glb"},  
+                {"nombre": "Base trasera",      "modelo": "assets/modelos/base_trasera.glb"}, 
+                {"nombre": "Carcasa lateral",   "modelo": "assets/modelos/Carcasa_lateral.glb"} 
+            ]
+
+            sectores = [
+                (random.randint(-140, -50), random.randint(-120, -20)), 
+                (random.randint(50, 140), random.randint(-120, 20)),
+                (random.randint(-70, 70), random.randint(60, 150)),  
+                (random.randint(50, 140), random.randint(60, 150)), 
+                (random.randint(50, 140), random.randint(-50, 20)), 
+            ]
+            random.shuffle(sectores)
+
+            for i, info in enumerate(piezas_info):
+                offset_x, offset_z = sectores[i]
+                pos_x = centro_arena_x + offset_x
+                pos_z = centro_arena_z + offset_z
+                
+                PiezaPortal(
+                    nombre_pieza=info["nombre"], 
+                    modelo_path=info["modelo"],  
+                    position=(pos_x, 1, pos_z), 
+                    gestor=gestor_portal_arena
+                ) 
+                
+        elif tipo_mision_elegida == "SELLAR_GRIETAS": 
+            sectores_grietas = [ 
+                (random.randint(-140, -50), random.randint(-120, -20)),
+                (random.randint(50, 140), random.randint(-120, 20)),
+                (random.randint(-70, 70), random.randint(60, 150)), 
+            ] 
+            random.shuffle(sectores_grietas) 
+            
+            for offset_x, offset_z in sectores_grietas:
+                pos_x = centro_arena_x + offset_x
+                pos_z = centro_arena_z + offset_z 
+                
+                g = Grieta(position=(pos_x, 1, pos_z), gestor=gestor_portal_arena)
+                print(f" Grieta creada en: {g.position}")
+        # ============================================================== #
         
         gestor = GestorArena(
             jefe_class=jefe_asignado,
@@ -191,15 +245,8 @@ def update():
         
     z_jugador = jugador_principal.z
     
-    # Render Distance (Estilo Minecraft) para los chunks masivos del patio
-    if 'patio_chunks' in globals():
-        for chunk in globals()['patio_chunks']:
-            # Rango visual configurado a 1000 metros
-            if abs(chunk.z - z_jugador) > 1000:
-                chunk.visible = False
-            else:
-                chunk.visible = True
-                
+    # Render Distance (Patio removal optimization)
+    # The patio chunks have been deleted to focus only on Arena 0.
     # --- CULLING DE CHUNKS DE ARENAS (GPU OPTIMIZATION) ---
     # Solo renderizamos la arena actual, la anterior y la siguiente.
     # El resto desaparece completamente del GPU (culling de millones de vértices).

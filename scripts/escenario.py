@@ -5,7 +5,7 @@ from scripts.entorno.techo import generar_techo
 
 class CoordinadorEscenario:
     def __init__(self):
-        self.num_arenas = 4
+        self.num_arenas = 1
         self.tamano_arena = 400 
         self.offset_z = 800 
         self.puertas_frente_por_arena = {}
@@ -13,10 +13,8 @@ class CoordinadorEscenario:
         self.chunks_arenas = []
 
     def construir_nivel_base(self):
-        # Generar el masivo patio exterior una sola vez
-        from scripts.entorno.patio import generar_patio_global
-        generar_patio_global(self.num_arenas, self.offset_z, self.tamano_arena)
-        print("Éxito: Patio exterior masivo generado.")
+        # El patio exterior ha sido removido por optimización (solo Arena 0).
+        pass
 
     def generar_arena_individual(self, i):
         from ursina import Entity

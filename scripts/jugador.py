@@ -128,6 +128,7 @@ class Jugador(Entity):
         
         self.radar_jugador = Entity(parent=self.radar_bg, model='arrow', color=color.cyan, scale=(0.06, 0.06), z=-0.03)
         self.puntos_radar = [Entity(parent=self.radar_bg, model='circle', color=color.red, scale=(0.05, 0.05), enabled=False, z=-0.02) for _ in range(40)]
+        self.punto_radar_mesa = Entity(parent=self.radar_bg, model='circle', color=color.yellow, scale=(0.06, 0.06), enabled=False, z=-0.04)
         
         # --- 11. CHEATS ---
         self.invulnerable = False
@@ -379,6 +380,22 @@ class Jugador(Entity):
                             
         for i in range(indice_punto, len(self.puntos_radar)):
             self.puntos_radar[i].enabled = False
+
+        # --- RADAR DE MESA DE TRABAJO ---
+        if hasattr(main, 'mesa_trabajo') and main.mesa_trabajo and not getattr(main.mesa_trabajo, 'destroyed', False):
+            dir_vector = main.mesa_trabajo.world_position - self.position
+            dir_xz = Vec3(dir_vector.x, 0, dir_vector.z)
+            distancia = dir_xz.length()
+            if distancia < 250:
+                local_z = dir_xz.dot(self.forward) 
+                local_x = dir_xz.dot(self.right)   
+                self.punto_radar_mesa.enabled = True
+                self.punto_radar_mesa.x = clamp(local_x * 0.0018, -0.45, 0.45)
+                self.punto_radar_mesa.y = clamp(local_z * 0.0018, -0.45, 0.45)
+            else:
+                self.punto_radar_mesa.enabled = False
+        else:
+            self.punto_radar_mesa.enabled = False
 
         # --- MOTOR DE NIEVE CONTINUA ---
         import random

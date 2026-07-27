@@ -1,8 +1,8 @@
-from ursina import Entity, scene
+from ursina import Entity, scene, color, load_texture
 from scripts.entorno.puerta import Puerta
+import random
 
 def generar_paredes(centro_x, centro_z, tamano, indice_arena, total_arenas):
-    tamano_pared = 10 
     mitad = tamano // 2
     
     inicio_x = centro_x - mitad
@@ -14,85 +14,83 @@ def generar_paredes(centro_x, centro_z, tamano, indice_arena, total_arenas):
     puertas_frente = []
     puertas_atras = []
     
-    # Escogemos el modelo de pared según el bioma
-    modelo_pared = 'assets/texturas/medieval/wall-fortified.glb' if indice_arena == 1 else 'assets/texturas/structure-wall.glb'
-
-    # Paredes Norte y Sur
-    for x in range(inicio_x, fin_x, tamano_pared):
-        pos_x = x + tamano_pared/2
+    # --- TEXTURAS GENERADAS CON IA ---
+    textura_concreto = load_texture('assets/texturas/pared_concreto.png')
+    if textura_concreto: textura_concreto.filtering = 'mipmap'
         
-        # Detectamos el centro para poner UNA SOLA puerta gigante
-        if pos_x == -5:
-            # --- PUERTA SUR (Atrás) ---
-            if indice_arena > 0:
-                p_sur = Puerta(position=(0, 0, inicio_z), rotation_y=0)
-                puertas_atras.append(p_sur)
-                # Llenamos el hueco SOBRE la puerta
-                Entity(parent=padre_paredes, model=modelo_pared, position=(0, 16.5, inicio_z + 1), collider=None, scale=(25, 27, 2), double_sided=True)
-            else:
-                Entity(parent=padre_paredes, model=modelo_pared, position=(0, 0, inicio_z + 1), collider=None, scale=(25, 30, 2), double_sided=True)
+    textura_danada = load_texture('assets/texturas/pared_danada.png')
+    if textura_danada: textura_danada.filtering = 'mipmap'
+
+    # --- PAREDES LATERALES (Este y Oeste) ---
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(tamano/30, 1), position=(inicio_x, 15, centro_z), scale=(2, 30, tamano), collider='box')
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(tamano/30, 1), position=(fin_x, 15, centro_z), scale=(2, 30, tamano), collider='box')
+    
+    # --- PAREDES FRONTALES (Norte y Sur) ---
+    ancho_muro = (mitad - 20)
+    centro_muro_izq = inicio_x + (ancho_muro / 2)
+    centro_muro_der = fin_x - (ancho_muro / 2)
+    
+    # --- PUERTAS Y MUROS SUR (Atrás) ---
+    if indice_arena > 0:
+        p_sur = Puerta(position=(0, 0, inicio_z), rotation_y=0)
+        puertas_atras.append(p_sur)
+        Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(40/15, 1), position=(0, 22.5, inicio_z), scale=(40, 15, 2), collider='box')
+    else:
+        Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(40/30, 1), position=(0, 15, inicio_z), scale=(40, 30, 2), collider='box')
+        
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(ancho_muro/30, 1), position=(centro_muro_izq, 15, inicio_z), scale=(ancho_muro, 30, 2), collider='box')
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(ancho_muro/30, 1), position=(centro_muro_der, 15, inicio_z), scale=(ancho_muro, 30, 2), collider='box')
+    
+    # --- PUERTAS Y MUROS NORTE (Frente) ---
+    if indice_arena < total_arenas - 1:
+        p_norte = Puerta(position=(0, 0, fin_z), rotation_y=180)
+        puertas_frente.append(p_norte)
+        Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(40/15, 1), position=(0, 22.5, fin_z), scale=(40, 15, 2), collider='box')
+    else:
+        Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(40/30, 1), position=(0, 15, fin_z), scale=(40, 30, 2), collider='box')
+
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(ancho_muro/30, 1), position=(centro_muro_izq, 15, fin_z), scale=(ancho_muro, 30, 2), collider='box')
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(ancho_muro/30, 1), position=(centro_muro_der, 15, fin_z), scale=(ancho_muro, 30, 2), collider='box')
+
+    textura_grieta_transparente = load_texture('assets/texturas/grieta_transparente.png')
+    if textura_grieta_transparente: textura_grieta_transparente.filtering = 'mipmap'
+
+    # --- SISTEMA DE DECALS (Grieta Transparente) ---
+    # Usamos una sola imagen PNG con transparencia real (canal alfa) para evitar generar miles de entidades.
+    # ¡1 sola entidad por daño en lugar de docenas!
+    num_danos = max(1, int(tamano / 40)) # Un daño cada ~40 unidades en promedio
+    
+    def colocar_decals(pos_constante, eje_constante, rot_y):
+        for _ in range(num_danos):
+            pos_var = random.uniform(-mitad + 20, mitad - 20)
+            y_pos = random.uniform(8, 22)
+            escala = random.uniform(15, 25)
             
-            # --- PUERTA NORTE (Frente) ---
-            if indice_arena < total_arenas - 1:
-                p_norte = Puerta(position=(0, 0, fin_z), rotation_y=180)
-                puertas_frente.append(p_norte)
-                Entity(parent=padre_paredes, model=modelo_pared, position=(0, 16.5, fin_z - 1), collider=None, rotation_y=180, scale=(25, 27, 2), double_sided=True)
-            else:
-                Entity(parent=padre_paredes, model=modelo_pared, position=(0, 0, fin_z - 1), collider=None, rotation_y=180, scale=(25, 30, 2), double_sided=True)
+            if eje_constante == 'z' and -25 < pos_var < 25:
+                continue
                 
-        elif pos_x == 5:
-            # Omitimos esta posición, ya que la puerta gigante abarca ambos lados.
-            pass
-        else:
-            # Muros estáticos normales (SIEMPRE se construyen tanto Norte como Sur)
-            # Para evitar que la textura se estire, apilamos 3 muros de altura 10 en vez de 1 muro de 30
-            for y in range(0, 30, 10):
-                # Muro Sur
-                Entity(parent=padre_paredes, model=modelo_pared, 
-                       position=(pos_x, y, inicio_z + 1), collider=None, scale=(10, 10, 2), double_sided=True)
+            x_val = pos_var if eje_constante == 'z' else pos_constante
+            z_val = pos_constante if eje_constante == 'z' else pos_var
                 
-                # Muro Norte
-                Entity(parent=padre_paredes, model=modelo_pared, 
-                       position=(pos_x, y, fin_z - 1), collider=None, rotation_y=180, scale=(10, 10, 2), double_sided=True)
+            Entity(
+                parent=padre_paredes,
+                model='cube',
+                texture=textura_grieta_transparente,
+                color=color.white,
+                transparent=True, # IMPORTANTE: Habilita el canal alfa para ocultar el fondo
+                position=(x_val + centro_x, y_pos, z_val + centro_z),
+                rotation=(0, rot_y, 0),
+                scale=(escala, escala, 0.2), # Delgado como una calcomanía
+                collider=None
+            )
 
-    # Paredes Este y Oeste (Laterales completamente cerrados)
-    for z in range(inicio_z, fin_z, tamano_pared):
-        pos_z = z + tamano_pared/2
-        
-        # Apilamos los laterales también
-        for y in range(0, 30, 10):
-            Entity(parent=padre_paredes, model=modelo_pared, 
-                   position=(inicio_x + 0.1, y, pos_z), collider=None, rotation_y=90, scale=(10, 10, 10), double_sided=True)
-                   
-            Entity(parent=padre_paredes, model=modelo_pared, 
-                   position=(fin_x - 0.1, y, pos_z), collider=None, rotation_y=-90, scale=(10, 10, 10), double_sided=True)
-
-    # MAGIA DE OPTIMIZACIÓN: Fusionamos los 480 bloques de ladrillo en 1 sola malla 3D.
-    if len(padre_paredes.children) > 0:
-        hijos = list(padre_paredes.children)
-        padre_paredes.flatten_strong()
-        
-        def limpiar_entidad(ent):
-            if ent in scene.entities:
-                scene.entities.remove(ent)
-            for c in ent.children:
-                limpiar_entidad(c)
-                
-        for hijo in hijos:
-            limpiar_entidad(hijo)
-
-    # --- COLISIONADORES MASIVOS ---
-    # En lugar de 480 colisionadores pequeños, creamos 6 cajas gigantes invisibles
-    # Laterales (Este y Oeste)
-    Entity(parent=padre_paredes, model='cube', position=(inicio_x, 15, centro_z), scale=(2, 30, tamano), collider='box', visible=False)
-    Entity(parent=padre_paredes, model='cube', position=(fin_x, 15, centro_z), scale=(2, 30, tamano), collider='box', visible=False)
-    
-    # Frontales (Norte y Sur divididos en Izquierda y Derecha por la puerta)
-    # Puerta abarca de -20 a 20. Así que el muro izquierdo va de -200 a -20 (centro = -110, ancho = 180)
-    Entity(parent=padre_paredes, model='cube', position=(-110, 15, inicio_z), scale=(180, 30, 2), collider='box', visible=False)
-    Entity(parent=padre_paredes, model='cube', position=(110, 15, inicio_z), scale=(180, 30, 2), collider='box', visible=False)
-    
-    Entity(parent=padre_paredes, model='cube', position=(-110, 15, fin_z), scale=(180, 30, 2), collider='box', visible=False)
-    Entity(parent=padre_paredes, model='cube', position=(110, 15, fin_z), scale=(180, 30, 2), collider='box', visible=False)
+    # Oeste
+    colocar_decals(-mitad + 1.1, 'x', -90)
+    # Este
+    colocar_decals(mitad - 1.1, 'x', 90)
+    # Sur
+    colocar_decals(-mitad + 1.1, 'z', 180)
+    # Norte
+    colocar_decals(mitad - 1.1, 'z', 0)
 
     return puertas_frente, puertas_atras, padre_paredes
