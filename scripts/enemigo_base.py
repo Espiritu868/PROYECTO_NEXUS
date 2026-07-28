@@ -271,6 +271,21 @@ class EnemigoBase(Entity):
     def curar(self):
         self.curando = True
         
+        # --- SISTEMA DE DROPS (POWERUPS PROVISIONALES) ---
+        import random
+        from scripts.powerups import PowerUp
+        
+        # Probabilidad de soltar un objeto (ej. 60% de soltar algo)
+        if random.random() < 0.60:
+            # Puedes ajustar los pesos, por ejemplo es más común la munición o vida que un botiquín entero
+            tipo_drop = random.choices(
+                population=['vida', 'botiquin', 'municion'],
+                weights=[0.4, 0.2, 0.4],
+                k=1
+            )[0]
+            # Spawnear el powerup en la posición actual del enemigo
+            PowerUp(tipo=tipo_drop, position=self.position)
+            
         # Detenemos al enemigo
         self.velocidad = 0
         self.jugador_objetivo = None 
