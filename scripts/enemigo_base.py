@@ -342,8 +342,15 @@ class EnemigoBase(Entity):
                     
                 if self.jugador_objetivo.vida <= 0:
                     print("¡HAS MUERTO!")
-                    from ursina import application
-                    application.quit()
+                    from ursina import scene, application
+                    encontrado = False
+                    for e in scene.entities:
+                        if type(e).__name__ == 'PantallaMuerte':
+                            e.mostrar()
+                            encontrado = True
+                            break
+                    if not encontrado:
+                        application.quit()
                     
             self.ultimo_ataque = time.time()
             

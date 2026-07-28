@@ -88,12 +88,13 @@ class GestorArena(Entity):
             while True:
                 # Los primeros 5 enemigos se generan relativamente cerca del jugador
                 if len(self.enemigos) <= 5: 
-                    rx = random.choice([random.randint(-60, -30), random.randint(30, 60)])
-                    rz = random.choice([random.randint(-60, -30), random.randint(30, 60)])
+                    # Primeros 5: distancia media (tiempo para reaccionar)
+                    rx = random.choice([random.randint(-60, -40), random.randint(40, 60)])
+                    rz = random.choice([random.randint(-60, -40), random.randint(40, 60)])
                 else:
-                    # Los siguientes (cuando matas a uno) se generan más lejos
-                    rx = random.choice([random.randint(-150, -80), random.randint(80, 150)])
-                    rz = random.choice([random.randint(-150, -80), random.randint(80, 150)])
+                    # Los siguientes: un poco más lejos para dar respiro
+                    rx = random.choice([random.randint(-100, -70), random.randint(70, 100)])
+                    rz = random.choice([random.randint(-100, -70), random.randint(70, 100)])
                     
                 if self.jugador:
                     # Posición relativa al centro de la arena pero basada en donde está el jugador
@@ -123,7 +124,7 @@ class GestorArena(Entity):
         # Solo si está sellado dentro empezamos a checar la victoria
         if self.jugador_dentro and not self.completada:
             
-            if len(vivos) == 0:
+            if len(vivos) == 0 and self.spawns_pendientes <= 0:
                 if not hasattr(self, 'ronda_actual'):
                     self.ronda_actual = 1
                     

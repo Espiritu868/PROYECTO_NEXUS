@@ -25,7 +25,7 @@ from scripts.villano_o import VillanoO
 from scripts.zombie import Zombie   
 from scripts.gestor_arena import GestorArena
 from scripts.editor_nivel import EditorNivel
-from scripts.menu_pausa import MenuPausa
+from scripts.menu_pausa import MenuPausa, PantallaMuerte
 
 app = Ursina(title="Proyecto Nexo - Nivel 0")
 window.fullscreen = True
@@ -42,8 +42,9 @@ color_bruma = color.rgba(0.01, 0.01, 0.02, 1.0)
 application.base.setBackgroundColor(color_bruma) # El fondo es oscuridad pura
 window.color = color_bruma 
 
-# --- MENÚ DE PAUSA ---
+# --- MENÚ DE PAUSA Y MUERTE ---
 menu_pausa = MenuPausa()
+pantalla_muerte = PantallaMuerte()
 
 # Sistema de Oscuridad de Ursina (Usando la niebla pero negra)
 # Inicia a 15m y se vuelve 100% oscuridad impenetrable a los 100m
@@ -125,6 +126,7 @@ def iniciar_carga_pesada():
     actualizar_loading(0.3, "Invocando al Jugador Principal...")
     jugador_principal = Jugador(position=(0, 10, 0))
     menu_pausa.jugador = jugador_principal
+    pantalla_muerte.jugador = jugador_principal
     
     # Inicializar el Editor de Niveles (F4 para abrir)
     editor = EditorNivel(jugador_principal)
@@ -240,6 +242,48 @@ def iniciar_carga_pesada():
         application.base.taskMgr.step()
         
     carga_terminada = True
+
+def reset_game():
+    global carga_terminada, gestores_arena, menu_pausa, pantalla_muerte, pantalla_carga, imagen_actual
+    from ursina import scene, application, mouse, AmbientLight, DirectionalLight, color
+    import random
+    from direct.gui.OnscreenImage import OnscreenImage
+    from panda3d.core import TransparencyAttrib
+    from scripts.menu_pausa import MenuPausa, PantallaMuerte
+    
+    # 1. Limpiar escena completa (Destruye absolutamente todas las entidades)
+    scene.clear()
+    application.paused = False
+    mouse.locked = True
+    
+    # 2. Recrear luces destruidas
+    AmbientLight(color=color.rgba(20, 20, 25, 255)) 
+    DirectionalLight(y=2, z=3, shadows=False, color=color.rgba(10, 15, 30, 255))
+    
+    # 3. Reiniciar variables globales críticas
+    carga_terminada = False
+    gestores_arena = []
+    
+    # 4. Recrear interfaces
+    menu_pausa = MenuPausa()
+    menu_pausa.on_reiniciar = reset_game
+    pantalla_muerte = PantallaMuerte()
+    pantalla_muerte.on_reiniciar = reset_game
+    
+    # 5. Recrear pantalla de carga
+    imagen_actual = random.choice(lista_imagenes)
+    pantalla_carga = OnscreenImage(image=imagen_actual, parent=application.base.render2d)
+    pantalla_carga.setTransparency(TransparencyAttrib.MAlpha)
+    pantalla_carga.setScale(1, 1, 1)
+    pantalla_carga.setBin("background", 10)
+    
+    application.base.taskMgr.add(check_destruct, 'destruct_loading_screen')
+    
+    # Volver a llamar al generador del mundo
+    iniciar_carga_pesada()
+
+menu_pausa.on_reiniciar = reset_game
+pantalla_muerte.on_reiniciar = reset_game
 
 if __name__ == '__main__':
     # Ejecutamos la carga de modelos sincrónicamente, pero usando nuestro renderFrame para el slideshow

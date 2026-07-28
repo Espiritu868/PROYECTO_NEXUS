@@ -16,6 +16,9 @@ vive en self.contenido, un hijo separado que sí se activa/desactiva.
 """
 
 from ursina import Entity, Button, Text, color, application, mouse, camera, window, curve, held_keys
+import sys
+import os
+import subprocess
 
 # Un solo color de acento (rojo, coherente con la barra de vida y el
 # tono "peligro/tensión" del juego) en vez de mezclar azul + rojo.
@@ -23,7 +26,7 @@ from ursina import Entity, Button, Text, color, application, mouse, camera, wind
 # automáticamente de 0-255 a 0-1 — si le pasas valores >1, la GPU los
 # recorta directo a 1.0 (blanco puro). Por eso todo va dividido entre 255.
 COLOR_ACENTO = color.rgba(190/255, 45/255, 45/255, 1)
-COLOR_PANEL = color.rgba(8/255, 9/255, 14/255, 150/255)      # muy translúcido: no es una "caja", solo oscurece
+COLOR_PANEL = color.rgba(4/255, 6/255, 10/255, 230/255)      # Oscuro premium casi opaco
 COLOR_TEXTO_SUAVE = color.rgba(150/255, 155/255, 165/255, 1)
 COLOR_BOTON_NEUTRO = color.rgba(40/255, 42/255, 48/255, 1)
 COLOR_BOTON_NEUTRO_HOVER = color.rgba(58/255, 61/255, 68/255, 1)
@@ -79,6 +82,15 @@ class MenuPausa(Entity):
             )
 
         # --- TÍTULO ---
+        self.titulo_sombra = Text(
+            parent=self.contenido,
+            text='P A U S A',
+            origin=(0, 0),
+            y=0.215, x=0.005,
+            scale=3,
+            color=color.black,
+            ignore_paused=True
+        )
         self.titulo = Text(
             parent=self.contenido,
             text='P A U S A',
@@ -108,7 +120,6 @@ class MenuPausa(Entity):
             ignore_paused=True
         )
 
-        # --- BOTONES ---
         self.boton_reanudar = Button(
             parent=self.contenido,
             text='Reanudar',
@@ -122,10 +133,23 @@ class MenuPausa(Entity):
         )
         self.boton_reanudar.on_click = self.reanudar
 
+        self.boton_reiniciar = Button(
+            parent=self.contenido,
+            text='Reiniciar Nivel',
+            y=-0.11,
+            scale=(0.32, 0.085),
+            color=COLOR_BOTON_NEUTRO,
+            highlight_color=COLOR_BOTON_NEUTRO_HOVER,
+            pressed_color=COLOR_BOTON_NEUTRO_PRESS,
+            text_color=color.white,
+            ignore_paused=True
+        )
+        self.boton_reiniciar.on_click = self.reiniciar
+
         self.boton_salir = Button(
             parent=self.contenido,
             text='Salir del juego',
-            y=-0.11,
+            y=-0.22,
             scale=(0.32, 0.085),
             color=color.rgba(110/255, 28/255, 28/255, 1),
             highlight_color=color.rgba(145/255, 40/255, 40/255, 1),
@@ -139,7 +163,7 @@ class MenuPausa(Entity):
             parent=self.contenido,
             text='ESC para reanudar',
             origin=(0, 0),
-            y=-0.23,
+            y=-0.33,
             scale=0.75,
             color=COLOR_TEXTO_SUAVE,
             ignore_paused=True
@@ -161,6 +185,13 @@ class MenuPausa(Entity):
         if esc_actual and not self._esc_anterior:
             self.alternar()
         self._esc_anterior = esc_actual
+        
+        if self.contenido.enabled:
+            import math
+            from ursina import time
+            escala = 3.0 + math.sin(time.time() * 3) * 0.05
+            self.titulo.scale = escala
+            self.titulo_sombra.scale = escala
 
     def alternar(self):
         """Muestra u oculta el menú según su estado actual."""
@@ -196,3 +227,96 @@ class MenuPausa(Entity):
 
     def salir(self):
         application.quit()
+        
+    def reiniciar(self):
+        if hasattr(self, 'on_reiniciar') and self.on_reiniciar:
+            self.on_reiniciar()
+
+class PantallaMuerte(Entity):
+    def __init__(self, **kwargs):
+        super().__init__(parent=camera.ui, enabled=False, ignore_paused=True, **kwargs)
+
+        # Fondo completamente negro semi-transparente
+        self.velo = Entity(
+            parent=self,
+            model='quad',
+            color=color.rgba(15/255, 0, 0, 230/255),  # Un tono muy oscuro rojizo
+            scale=(window.aspect_ratio * 2, 2),
+            z=3,
+            ignore_paused=True
+        )
+
+        self.titulo_sombra = Text(
+            parent=self,
+            text='HAS MUERTO',
+            origin=(0, 0),
+            y=0.14, x=0.01,
+            scale=5,
+            color=color.black,
+            ignore_paused=True
+        )
+        self.titulo = Text(
+            parent=self,
+            text='HAS MUERTO',
+            origin=(0, 0),
+            y=0.15,
+            scale=5,
+            color=color.red,
+            ignore_paused=True
+        )
+
+        self.boton_reintentar = Button(
+            parent=self,
+            text='Volver a intentar',
+            y=-0.1,
+            scale=(0.4, 0.1),
+            color=COLOR_BOTON_NEUTRO,
+            highlight_color=COLOR_BOTON_NEUTRO_HOVER,
+            pressed_color=COLOR_BOTON_NEUTRO_PRESS,
+            text_color=color.white,
+            ignore_paused=True
+        )
+        self.boton_reintentar.on_click = self.reiniciar
+
+        self.boton_salir = Button(
+            parent=self,
+            text='Salir al Escritorio',
+            y=-0.22,
+            scale=(0.4, 0.1),
+            color=color.rgba(110/255, 28/255, 28/255, 1),
+            highlight_color=color.rgba(145/255, 40/255, 40/255, 1),
+            pressed_color=color.rgba(80/255, 18/255, 18/255, 1),
+            text_color=color.white,
+            ignore_paused=True
+        )
+        self.boton_salir.on_click = application.quit
+        
+        self.jugador = None
+
+    def update(self):
+        if self.enabled:
+            import math
+            from ursina import time
+            # Animación latido más fuerte para HAS MUERTO
+            escala = 5.0 + math.sin(time.time() * 4) * 0.2
+            self.titulo.scale = escala
+            self.titulo_sombra.scale = escala
+
+    def mostrar(self):
+        self.enabled = True
+        application.paused = True
+        mouse.locked = False
+        mouse.visible = True
+        
+        # Efecto de zoom out dramático
+        self.titulo.scale = 8
+        self.titulo_sombra.scale = 8
+
+        if self.jugador:
+            self.jugador.mira.enabled = False
+            self.jugador.barra_vida_bg.enabled = False
+            self.jugador.texto_vida.enabled = False
+
+    def reiniciar(self):
+        if hasattr(self, 'on_reiniciar') and self.on_reiniciar:
+            self.on_reiniciar()
