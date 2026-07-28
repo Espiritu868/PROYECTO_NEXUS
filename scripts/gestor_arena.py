@@ -57,56 +57,105 @@ class GestorArena(Entity):
             # 2. Activamos el contador para los enemigos normales
             self.spawns_pendientes = self.cantidad_enemigos
 
-        # SPAWN GRADUAL: Genera 1 enemigo cada 0.2 segundos para no trabar el juego
-        from ursina import time
+        # --- MANTENER HASTA 5 ENEMIGOS VIVOS (SPAWN DINÁMICO) ---
         import random
-        if self.spawns_pendientes > 0 and time.time() - self.tiempo_ultimo_spawn > 0.2:
-            self.tiempo_ultimo_spawn = time.time()
+        
+        # Filtramos los enemigos que siguen vivos
+        vivos = [e for e in self.enemigos if e and hasattr(e, 'vida') and e.vida > 0]
+        
+        # Si faltan por spawnear y hay menos de 5 vivos en la arena
+        if self.jugador_dentro and not self.completada and self.spawns_pendientes > 0 and len(vivos) < 5:
             self.spawns_pendientes -= 1
             
             from scripts.zombie import Zombie
             from scripts.villano_l import VillanoL
             from scripts.villano_o import VillanoO
             
-            offset_x = random.choice([random.randint(-150, -50), random.randint(50, 150)])
-            offset_z = random.randint(-150, 150)
+            def es_posicion_valida(rx, rz):
+                margen = 3.5
+                if -100 - margen < rz < -100 + margen:
+                    if -200 - margen < rx < -50 + margen or 50 - margen < rx < 200 + margen: return False
+                if -margen < rz < margen:
+                    if -170 - margen < rx < -50 + margen or 50 - margen < rx < 170 + margen: return False
+                if 100 - margen < rz < 100 + margen:
+                    if -200 - margen < rx < -50 + margen or 50 - margen < rx < 200 + margen: return False
+                if -100 - margen < rx < -100 + margen:
+                    if -150 - margen < rz < 50 + margen: return False
+                if 100 - margen < rx < 100 + margen:
+                    if -50 - margen < rz < 150 + margen: return False
+                return True
+            
+            while True:
+                # Los primeros 5 enemigos se generan relativamente cerca del jugador
+                if len(self.enemigos) <= 5: 
+                    rx = random.choice([random.randint(-60, -30), random.randint(30, 60)])
+                    rz = random.choice([random.randint(-60, -30), random.randint(30, 60)])
+                else:
+                    # Los siguientes (cuando matas a uno) se generan más lejos
+                    rx = random.choice([random.randint(-150, -80), random.randint(80, 150)])
+                    rz = random.choice([random.randint(-150, -80), random.randint(80, 150)])
+                    
+                if self.jugador:
+                    # Posición relativa al centro de la arena pero basada en donde está el jugador
+                    offset_x = (self.jugador.x - self.centro_x) + rx
+                    offset_z = (self.jugador.z - self.centro_z) + rz
+                else:
+                    offset_x = rx
+                    offset_z = rz
+                    
+                # Asegurarnos de que no spawneen fuera de los límites de la arena (-200 a 200)
+                offset_x = max(-180, min(180, offset_x))
+                offset_z = max(-180, min(180, offset_z))
+                
+                if es_posicion_valida(offset_x, offset_z):
+                    break
+                    
             posicion_aleatoria = (self.centro_x + offset_x, 0, self.centro_z + offset_z)
             rotacion_aleatoria = random.randint(0, 360) 
 
             tipo_enemigo = random.choice([VillanoL, VillanoO, Zombie])
             enemigo = tipo_enemigo(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
             self.enemigos.append(enemigo)
+            
+            # Reevaluar vivos inmediatamente para que spawnee los 5 en un solo frame
+            vivos.append(enemigo)
 
         # Solo si está sellado dentro empezamos a checar la victoria
         if self.jugador_dentro and not self.completada:
-            vivos = []
-            for e in self.enemigos:
-                if e and hasattr(e, 'vida') and e.vida > 0:
-                    vivos.append(e)
             
             if len(vivos) == 0:
-                self.completada = True
-                print("¡Arena despejada! Abriendo puertas frontales y siguiente arena...")
+                if not hasattr(self, 'ronda_actual'):
+                    self.ronda_actual = 1
+                    
+                if not hasattr(self, 'max_rondas'):
+                    self.max_rondas = 3
                 
-                # --- ABRIR PUERTAS TRASERAS DE LA SIGUIENTE ARENA ---
-                import __main__ as main
-                if hasattr(main, 'gestores_arena'):
-                    if self.indice_arena + 1 < len(main.gestores_arena):
-                        sig_gestor = main.gestores_arena[self.indice_arena + 1]
-                        for p in sig_gestor.puertas_atras:
-                            if p:
-                                p.abrir()
-                
-                # --- UI: Texto Animado ---
-                from ursina import Text, color, destroy
-                texto = Text(text="¡ZONA DESPEJADA!", origin=(0, 0), scale=3, color=color.azure, y=0.1)
-                texto.animate_color(color.rgba(0, 128, 255, 0), duration=3, delay=1.5)
-                texto.animate_scale(4, duration=3)
-                destroy(texto, delay=4.5)
-                
-                for puerta in self.puertas_frente:
-                    if puerta:
-                        puerta.abrir()
+                if self.ronda_actual < self.max_rondas:
+                    self.ronda_actual += 1
+                    # Incrementamos un poco la dificultad cada ronda sumando 2 enemigos extra
+                    self.spawns_pendientes = self.cantidad_enemigos + (self.ronda_actual * 2)
+                    print(f"¡Inicia Ronda {self.ronda_actual}!")
+                    from ursina import Text, color, destroy
+                    texto_ronda = Text(text=f"¡RONDA {self.ronda_actual}!", origin=(0, 0), scale=4, color=color.red, y=0.1)
+                    texto_ronda.animate_color(color.rgba(255, 0, 0, 0), duration=2, delay=1.0)
+                    texto_ronda.animate_scale(5, duration=2)
+                    destroy(texto_ronda, delay=3.5)
+                else:
+                    self.completada = True
+                    print("¡Arena despejada! Abriendo puertas frontales y siguiente arena...")
+                    
+                    # --- ABRIR PUERTAS TRASERAS DE LA SIGUIENTE ARENA ---
+                    import __main__ as main
+                    if hasattr(main, 'gestores_arena'):
+                        if self.indice_arena + 1 < len(main.gestores_arena):
+                            sig_gestor = main.gestores_arena[self.indice_arena + 1]
+                            for p in sig_gestor.puertas_atras:
+                                if p:
+                                    p.abrir()
+                    
+                    for puerta in self.puertas_frente:
+                        if puerta:
+                            puerta.abrir()
 
         # --- SELLAR ARENA AL SALIR Y ELIMINAR CADÁVERES ---
         # Si la arena fue completada, revisamos si el jugador ya salió hacia el patio.

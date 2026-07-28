@@ -33,28 +33,42 @@ class VillanoL(EnemigoBase):
             # Disparar láser (Rayo instantáneo visual Hitscan)
             origen = self.position + Vec3(0, 1.5, 0)
             destino = self.jugador_objetivo.position + Vec3(0, 1.5, 0)
+            direccion = (destino - origen).normalized()
             dist = (destino - origen).length()
+            
+            # --- COMPROBACIÓN DE LÍNEA DE VISIÓN (Line of Sight) ---
+            from ursina import raycast
+            hit_vision = raycast(origen, direction=direccion, distance=dist, ignore=(self,))
+            
+            # Si el rayo choca con algo que NO es el jugador (por ejemplo, una pared), el láser se bloquea
+            if hit_vision.hit and hit_vision.entity != self.jugador_objetivo:
+                # Opcional: El láser choca contra la pared
+                dist = hit_vision.distance
+                daño_efectivo = False
+            else:
+                daño_efectivo = True
             
             # Dibujamos el láser
             laser = Entity(
                 model='cube',
                 color=color.rgba(255, 0, 0, 200),
                 scale=(0.1, 0.1, dist),
-                position=origen + (destino - origen)/2,
+                position=origen + (direccion * (dist / 2)),
                 unlit=True
             )
-            laser.look_at(destino)
+            laser.look_at(origen + (direccion * dist))
             
             # Desvanece el láser
             laser.animate_color(color.rgba(255, 0, 0, 0), duration=0.3, curve=curve.linear)
             destroy(laser, delay=0.3)
             
-            # Daño
-            self.jugador_objetivo.vida -= 15
-            self.jugador_objetivo.texto_vida.text = f'SALUD: {self.jugador_objetivo.vida}'
-            
-            if self.jugador_objetivo.vida < 40:
-                self.jugador_objetivo.texto_vida.color = color.red
+            # Aplicar Daño solo si hay visión clara
+            if daño_efectivo:
+                self.jugador_objetivo.vida -= 15
+                self.jugador_objetivo.texto_vida.text = f'SALUD: {self.jugador_objetivo.vida}'
+                
+                if self.jugador_objetivo.vida < 40:
+                    self.jugador_objetivo.texto_vida.color = color.red
                 
             if self.jugador_objetivo.vida <= 0:
                 print("¡HAS MUERTO!")

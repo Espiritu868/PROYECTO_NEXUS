@@ -25,6 +25,12 @@ class PowerUp(Entity):
             self.color = color.green
         elif self.tipo == 'municion':
             self.color = color.yellow
+        elif self.tipo == 'velocidad':
+            self.color = color.azure
+        elif self.tipo == 'fuerza':
+            self.color = color.orange
+        elif self.tipo == 'escudo':
+            self.color = color.cyan
         elif self.tipo != 'arma':
             self.color = color.white
             
@@ -57,20 +63,29 @@ class PowerUp(Entity):
         # Lógica al recoger el powerup
         if self.tipo == 'vida':
             jugador.vida = min(jugador.vida + 10, 100)
+            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡+10 Vida!")
             print("¡Recogiste una pequeña porción de Vida (+10)!")
         elif self.tipo == 'botiquin':
             jugador.vida = min(jugador.vida + 50, 100)
+            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡Botiquín (+50 Vida)!")
             print("¡Recogiste un Botiquín (+50 Vida)!")
         elif self.tipo == 'municion':
             # Asumimos que el jugador tendrá atributo municion en el futuro o en otro script
             if not hasattr(jugador, 'municion'):
                 jugador.municion = 0
             jugador.municion += 30
+            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡Munición (+30)!")
             print(f"¡Recogiste Munición! (Munición actual: {jugador.municion})")
         elif self.tipo == 'arma':
             if hasattr(jugador, 'equipar_arma'):
                 jugador.equipar_arma()
+            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡Arma conseguida!")
             print("¡Has recogido un arma!")
+        elif self.tipo in ['velocidad', 'fuerza', 'escudo']:
+            if hasattr(jugador, 'activar_powerup'):
+                nombres = {'velocidad': 'Súper Velocidad', 'fuerza': 'Fuerza Bruta', 'escudo': 'Escudo Invencible'}
+                jugador.activar_powerup(self.tipo, duracion=10.0, nombre_mostrar=nombres.get(self.tipo, self.tipo))
+            print(f"¡Recogiste PowerUp temporal: {self.tipo}!")
             
         # Actualizar la interfaz de usuario del jugador para reflejar cambios en salud
         if hasattr(jugador, 'texto_vida'):

@@ -52,6 +52,22 @@ def generar_paredes(centro_x, centro_z, tamano, indice_arena, total_arenas):
     Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(ancho_muro/30, 1), position=(centro_muro_izq, 15, fin_z), scale=(ancho_muro, 30, 2), collider='box')
     Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(ancho_muro/30, 1), position=(centro_muro_der, 15, fin_z), scale=(ancho_muro, 30, 2), collider='box')
 
+    # --- LABERINTO (Muros internos grandes para optimizar FPS) ---
+    # Muros horizontales (Eje X)
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(150/30, 1), position=(centro_x - 125, 7.5, centro_z - 100), scale=(150, 15, 2), collider='box')
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(150/30, 1), position=(centro_x + 125, 7.5, centro_z - 100), scale=(150, 15, 2), collider='box')
+    
+    # Muro central dividido para no atrapar al jugador en el spawn (x=0, z=0)
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(120/30, 1), position=(centro_x - 110, 7.5, centro_z), scale=(120, 15, 2), collider='box')
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(120/30, 1), position=(centro_x + 110, 7.5, centro_z), scale=(120, 15, 2), collider='box')
+
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(150/30, 1), position=(centro_x - 125, 7.5, centro_z + 100), scale=(150, 15, 2), collider='box')
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(150/30, 1), position=(centro_x + 125, 7.5, centro_z + 100), scale=(150, 15, 2), collider='box')
+
+    # Muros verticales (Eje Z)
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(200/30, 1), position=(centro_x - 100, 7.5, centro_z - 50), scale=(2, 15, 200), collider='box')
+    Entity(parent=padre_paredes, model='cube', texture=textura_concreto, color=color.white, texture_scale=(200/30, 1), position=(centro_x + 100, 7.5, centro_z + 50), scale=(2, 15, 200), collider='box')
+
     textura_grieta_transparente = load_texture('assets/texturas/grieta_transparente.png')
     if textura_grieta_transparente: textura_grieta_transparente.filtering = 'mipmap'
 

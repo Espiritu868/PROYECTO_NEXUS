@@ -63,7 +63,8 @@ class EnemigoBase(Entity):
             color=color.black,
             scale=(2, 0.2, 1),
             position=(0, 3, 0),
-            billboard=True # Siempre mira a la cámara
+            billboard=True,
+            enabled=False
         )
         self.barra_vida_roja = Entity(
             parent=self.barra_vida_fondo,
@@ -71,8 +72,9 @@ class EnemigoBase(Entity):
             color=color.red,
             scale=(1, 1, 1),
             position=(0, 0, -0.01),
-            origin_x=-0.5, # Ancla a la izquierda
-            x=-0.5
+            origin_x=-0.5,
+            x=-0.5,
+            enabled=False
         )
         
         # --- IA Y FÍSICAS ---
@@ -160,19 +162,40 @@ class EnemigoBase(Entity):
                 if time.time() - self.tiempo_ultimo_raycast > 0.2:
                     self.tiempo_ultimo_raycast = time.time()
                     hit_obstaculo = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=2, ignore=(self, self.jugador_objetivo))
-                    self.obstaculo_enfrente = hit_obstaculo.hit and hit_obstaculo.distance <= 0.5
+                    self.obstaculo_enfrente = hit_obstaculo.hit and hit_obstaculo.distance <= 1.0
                     
-                    if hit_obstaculo.hit and self.en_suelo:
-                        # Saltar obstáculo
-                        self.velocidad_y = self.velocidad_salto
-                        self.en_suelo = False
+                    if hit_obstaculo.hit:
+                        if self.en_suelo:
+                            # Intentar saltar por si es un obstáculo pequeño
+                            self.velocidad_y = self.velocidad_salto
+                            self.en_suelo = False
+                        
+                        import random
+                        if not hasattr(self, 'direccion_rodeo') or random.random() < 0.1:
+                            self.direccion_rodeo = random.choice([-1, 1])
                 
                 # MICRO-PAUSA POST ATAQUE: Si acaba de atacar, se queda quieto 1 segundo
                 if time.time() - self.ultimo_ataque > 1.0:
-                    # Moverse hacia adelante si no hay pared frente a su cara
                     if not self.obstaculo_enfrente:
-                        self.position += self.forward * self.velocidad * time.dt
-                        en_movimiento = True
+                        # Comprobar colisión antes de avanzar
+                        hit_avance = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=self.velocidad * time.dt + 0.5, ignore=(self, self.jugador_objetivo))
+                        if not hit_avance.hit:
+                            self.position += self.forward * self.velocidad * time.dt
+                            en_movimiento = True
+                    else:
+                        # IA: EVASIÓN DE LABERINTO
+                        # Comprobar que no haya pared hacia donde nos vamos a deslizar
+                        dir_rodeo = getattr(self, 'direccion_rodeo', 1)
+                        direccion_lateral = self.right * dir_rodeo
+                        
+                        hit_lateral = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_lateral, distance=(self.velocidad * 1.2) * time.dt + 1.0, ignore=(self, self.jugador_objetivo))
+                        
+                        if not hit_lateral.hit:
+                            self.position += direccion_lateral * (self.velocidad * 1.2) * time.dt
+                            en_movimiento = True
+                        else:
+                            # Si también hay pared a los lados (ej. esquina), damos la vuelta
+                            self.direccion_rodeo *= -1
                         
                         # IA: ESQUIVA ALEATORIA (DASH LATERAL)
                         # Cada 3 segundos, tiene un 30% de probabilidad de hacer un dash a un lado
@@ -223,19 +246,31 @@ class EnemigoBase(Entity):
             
         self.vida -= cantidad
         
+        self.barra_vida_fondo.enabled = True
+        self.barra_vida_roja.enabled = True
+        
         if self.actor:
             self.cambiar_animacion('pain', loop=False)
             self.ultimo_ataque = time.time() # Reusamos este timer para que no sobreescriba la animación de dolor
         
         # --- KNOCKBACK (EMPUJE FÍSICO) ---
         if self.jugador_objetivo:
-            # Calculamos el vector que va desde el jugador hasta el enemigo (dirección de la bala)
             direccion_empuje = self.position - self.jugador_objetivo.position
-            direccion_empuje.y = 0 # No lo empujamos hacia el cielo
+            direccion_empuje.y = 0
             if direccion_empuje.length() > 0:
                 direccion_empuje = direccion_empuje.normalized()
-                # Lo empujamos 1.5 metros hacia atrás bruscamente
-                self.animate_position(self.position + (direccion_empuje * 1.5), duration=0.15, curve=curve.out_expo)
+                from ursina import raycast
+                # Evitar que el knockback lo meta dentro de una pared
+                hit_kb = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_empuje, distance=2.0, ignore=(self, self.jugador_objetivo))
+                
+                if not hit_kb.hit:
+                    # Sin pared, retroceso completo
+                    self.animate_position(self.position + (direccion_empuje * 1.5), duration=0.15, curve=curve.out_expo)
+                else:
+                    # Si hay pared, retrocede solo lo permitido sin atravesarla
+                    dist_segura = max(0, hit_kb.distance - 0.5)
+                    if dist_segura > 0:
+                        self.animate_position(self.position + (direccion_empuje * dist_segura), duration=0.15, curve=curve.out_expo)
         
         # Actualizar visualmente la barra
         porcentaje = max(0, self.vida / self.vida_maxima)
@@ -245,28 +280,8 @@ class EnemigoBase(Entity):
         if self.vida <= 0:
             self.curar()
 
-    def cambiar_textura_y_bajar(self):
-        from ursina import load_texture, color
-        import random
-        # Usamos cualquier textura de personaje que NO sea villano (ni l, ni o)
-        texturas_civiles = ['a','b','c','d','e','f','g','h','i','j','k','m','n','p','q','r']
-        textura_elegida = random.choice(texturas_civiles)
-        tex = load_texture(f'assets/modelos/textures/texture-{textura_elegida}.png')
-        
-        if self.actor:
-            # Los mutantes GLB no pueden cambiar de textura tan fácil por sus UVs complejos
-            # Así que los dejamos amarillos o los ocultamos (hacemos que desaparezcan)
-            self.actor.setColorScale(1, 1, 1, 1)
-        else:
-            if tex:
-                self.modelo_visual.set_texture(tex._texture, 1)
-            # Devolver el color a normal
-            self.modelo_visual.color = color.white
-        
-        # Volver al piso
-        self.animate_y(self.y - 3, duration=0.5)
-        
-        self.curado = True
+        # (Este método fue eliminado porque los enemigos ahora se destruyen completamente para ahorrar RAM)
+        pass
 
     def curar(self):
         self.curando = True
@@ -285,8 +300,8 @@ class EnemigoBase(Entity):
             if random.random() < 0.60:
                 # Puedes ajustar los pesos, por ejemplo es más común la munición o vida que un botiquín entero
                 tipo_drop = random.choices(
-                    population=['vida', 'botiquin', 'municion'],
-                    weights=[0.4, 0.2, 0.4],
+                    population=['vida', 'botiquin', 'municion', 'velocidad', 'fuerza', 'escudo'],
+                    weights=[0.3, 0.1, 0.3, 0.1, 0.1, 0.1],
                     k=1
                 )[0]
                 # Spawnear el powerup en la posición actual del enemigo
@@ -306,15 +321,9 @@ class EnemigoBase(Entity):
         else:
             self.modelo_visual.animate_color(color.yellow, duration=1.5)
         
-        # Secuencia de curación (flotar hacia el cielo y brillar)
-        self.animate_rotation_y(self.rotation_y + 1080, duration=1.5)
-        self.animate_y(self.y + 3, duration=1.5)
-        
-        from ursina import Sequence, Func, Wait
-        Sequence(
-            Wait(1.5),
-            Func(self.cambiar_textura_y_bajar)
-        ).start()
+        # Destruir físicamente al enemigo después de que termine la animación de muerte
+        # Esto libera inmediatamente la memoria RAM y VRAM (Optimización extrema)
+        destroy(self, delay=1.5)
 
     def atacar(self):
         if time.time() - self.ultimo_ataque > self.tiempo_entre_ataques:

@@ -146,10 +146,12 @@ def iniciar_carga_pesada():
         centro_arena_z = indice * coordinador.offset_z
         jefe_asignado = None
         
-        if indice == 0:
+        if indice == 2:
             from scripts.golem import GolemBoss
             jefe_asignado = GolemBoss
-        cantidad_enemigos = 4 + (indice * 3)
+        
+        # Incrementar drásticamente la cantidad de enemigos
+        cantidad_enemigos = 15 + (indice * 10)
             
         puertas_f = coordinador.puertas_frente_por_arena[indice]
         puertas_a = coordinador.puertas_atras_por_arena[indice]

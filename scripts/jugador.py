@@ -137,21 +137,8 @@ class Jugador(Entity):
         # --- 9. SISTEMA DE NIEVE SUPER OPTIMIZADO ---
         import random
         self.copos_nieve = []
-        # Reducido de 250 a 60 copos (ahorra 190 entidades en memoria)
-        for i in range(60):
-            copo = Entity(
-                model='quad',
-                # Escala duplicada para compensar la menor cantidad y mantener el volumen visual
-                scale=random.uniform(0.15, 0.35),
-                color=color.rgba(255, 255, 255, 180),
-                billboard=True,
-                unlit=True 
-            )
-            copo.position = self.position + Vec3(random.uniform(-100, 100), random.uniform(0, 80), random.uniform(-100, 100))
-            copo.velocidad_caida = random.uniform(15, 35)
-            copo.desvio_viento = random.uniform(-6, 6)
-            self.copos_nieve.append(copo)
-            
+        # --- 9. (ELIMINADO SISTEMA DE CLIMA) ---
+        
         # --- 10. RADAR TÁCTICO (ESCÁNER BIOLÓGICO) ---
         self.radar_bg = Entity(parent=camera.ui, model='quad', color=color.rgba(0.0, 0.15, 0.0, 0.85), scale=(0.25, 0.25), position=(-0.7, 0.35))
         Entity(parent=self.radar_bg, model='quad', color=color.rgba(0.0, 0.7, 0.0, 0.4), scale=(1, 0.01), z=-0.01)
@@ -165,6 +152,13 @@ class Jugador(Entity):
         # --- 11. CHEATS ---
         self.invulnerable = False
         self.teclas_escritas = ""
+        
+        # --- 12. POWERUPS UI ---
+        self.powerup_texto = Text(parent=camera.ui, text='', position=(-0.60, -0.35), origin=(-0.5, -0.5), scale=1, color=color.white)
+        self.powerup_texto.enabled = False
+        
+        self.powerups_activos = {}
+        self.tiempo_mensaje_powerup = 0
 
     def input(self, key):
         if self.esta_muerto: return
@@ -312,11 +306,87 @@ class Jugador(Entity):
                 self.actor.loop(nombre_animacion)
             self.estado_animacion = nombre_animacion
 
+    def mostrar_mensaje_powerup(self, mensaje):
+        self.powerup_texto.text = mensaje
+        self.powerup_texto.enabled = True
+        self.tiempo_mensaje_powerup = 3.0
+        
+    def activar_powerup(self, tipo, duracion, nombre_mostrar):
+        if tipo in self.powerups_activos:
+            self.powerups_activos[tipo]['restante'] = duracion
+            self.powerups_activos[tipo]['total'] = duracion
+            return
+            
+        # Determinar posición en la lista
+        idx = len(self.powerups_activos)
+        y_pos = -0.45 + (idx * 0.05)
+        
+        bg = Entity(parent=camera.ui, model='quad', color=color.rgba(0,0,0,0.8), scale=(0.25, 0.02), position=(-0.47, y_pos))
+        fg_color = color.yellow if tipo == 'velocidad' else color.red if tipo == 'fuerza' else color.cyan
+        fg = Entity(parent=bg, model='quad', color=fg_color, scale=(1, 1), position=(-0.5, 0), origin=(-0.5, 0))
+        texto = Text(parent=camera.ui, text=nombre_mostrar, position=(-0.60, y_pos + 0.015), origin=(-0.5, -0.5), scale=0.8, color=color.white)
+        
+        self.powerups_activos[tipo] = {
+            'restante': duracion, 'total': duracion, 'nombre': nombre_mostrar,
+            'bg': bg, 'fg': fg, 'texto': texto
+        }
+        
+        if tipo == 'velocidad':
+            self.velocidad_caminar *= 1.5
+            self.velocidad_correr *= 1.5
+        elif tipo == 'fuerza':
+            self.dano_ataque *= 2
+        elif tipo == 'escudo':
+            self.invulnerable = True
+
+    def desactivar_powerup(self, tipo):
+        if tipo not in self.powerups_activos:
+            return
+            
+        datos = self.powerups_activos.pop(tipo)
+        destroy(datos['bg'])
+        destroy(datos['texto'])
+        
+        if tipo == 'velocidad':
+            self.velocidad_caminar /= 1.5
+            self.velocidad_correr /= 1.5
+        elif tipo == 'fuerza':
+            self.dano_ataque /= 2
+        elif tipo == 'escudo':
+            self.invulnerable = False
+            
+        self._reposicionar_powerups_ui()
+
+    def _reposicionar_powerups_ui(self):
+        idx = 0
+        for t, datos in self.powerups_activos.items():
+            y_pos = -0.45 + (idx * 0.05)
+            datos['bg'].y = y_pos
+            datos['texto'].y = y_pos + 0.015
+            idx += 1
+
     def update(self):
         # --- ACTUALIZAR BARRA DE VIDA ---
         self.texto_vida.text = f'{max(0, self.vida)} / 100'
         self.barra_vida_fg.scale_x = max(self.vida / 100.0, 0.0)
         
+        # --- ACTUALIZAR POWERUPS ---
+        if self.tiempo_mensaje_powerup > 0:
+            self.tiempo_mensaje_powerup -= time.dt
+            if self.tiempo_mensaje_powerup <= 0:
+                self.powerup_texto.enabled = False
+
+        powerups_a_eliminar = []
+        for tipo, datos in self.powerups_activos.items():
+            datos['restante'] -= time.dt
+            if datos['restante'] <= 0:
+                powerups_a_eliminar.append(tipo)
+            else:
+                datos['fg'].scale_x = max(datos['restante'] / datos['total'], 0.0)
+
+        for tipo in powerups_a_eliminar:
+            self.desactivar_powerup(tipo)
+                
         if self.esta_muerto:
             return
             
@@ -455,14 +525,4 @@ class Jugador(Entity):
             self.punto_radar_mesa.enabled = False
 
         # --- MOTOR DE NIEVE CONTINUA ---
-        import random
-        for copo in self.copos_nieve:
-            copo.y -= copo.velocidad_caida * time.dt
-            copo.x += copo.desvio_viento * time.dt
-            
-            if copo.y < self.y - 5 or abs(copo.x - self.x) > 120 or abs(copo.z - self.z) > 120:
-                copo.position = self.position + Vec3(
-                    random.uniform(-100, 100), 
-                    random.uniform(50, 80), 
-                    random.uniform(-100, 100)
-                )
+        # (SISTEMA DE NIEVE ELIMINADO)
