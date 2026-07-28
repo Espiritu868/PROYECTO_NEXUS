@@ -1,0 +1,92 @@
+CAMBIOS EN main.py — SISTEMA DE MENÚ DE PAUSA
+================================================
+Resumen para el equipo: se agregó un menú de pausa (tecla ESC) que
+congela el juego usando el sistema nativo de Ursina. Todo el código
+nuevo del menú vive en un archivo aparte: scripts/menu_pausa.py
+(clase MenuPausa). En main.py solo se tocaron 4 puntos puntuales,
+nada de la lógica existente (carga, arenas, culling, etc.) se movió
+ni se reescribió.
+
+
+CAMBIO 1 — Import nuevo
+------------------------
+Se agregó, junto a los demás imports de scripts/:
+
+    from scripts.menu_pausa import MenuPausa
+
+
+CAMBIO 2 — Se crea la instancia del menú
+------------------------------------------
+Justo después de configurar window.color, antes de la niebla:
+
+    # --- MENÚ DE PAUSA ---
+    menu_pausa = MenuPausa()
+
+Se crea una sola vez, arranca oculto por defecto.
+
+
+CAMBIO 3 — Se conecta el jugador con el menú
+-----------------------------------------------
+Justo después de crear al jugador dentro de iniciar_carga_pesada():
+
+    jugador_principal = Jugador(position=(0, 10, 0))
+    menu_pausa.jugador = jugador_principal          <- línea nueva
+
+Esto le da al menú una referencia al jugador para poder ocultar su
+mira/barra de vida/texto de vida mientras está en pausa (el radar se
+deja visible a propósito).
+
+
+CAMBIO 4 — Guard de pausa en el update() global
+---------------------------------------------------
+ANTES:
+    def update():
+        if not carga_terminada:
+            return
+
+AHORA:
+    def update():
+        if not carga_terminada or application.paused:
+            return
+
+Motivo: application.paused congela automáticamente el update() de
+CUALQUIER Entity (Jugador, enemigos, GestorArena — no hubo que tocar
+esos archivos). Pero el update() de main.py es una función global,
+no una Entity, así que Ursina no la congela sola; este guard lo hace
+manualmente para que el culling de chunks/enemigos no siga corriendo
+en pausa.
+
+
+CAMBIO 5 — La tecla ESC ya no cierra el juego directo
+---------------------------------------------------------
+ANTES:
+    def input(key):
+        if key == 'escape':
+            application.quit()
+
+AHORA:
+    def input(key):
+        pass
+
+Motivo: ESC ahora abre/cierra el menú de pausa en vez de cerrar el
+juego de inmediato. "Salir del juego" es ahora un botón dentro del
+menú.
+
+IMPORTANTE — por qué input() quedó vacío en vez de llamar al menú:
+la detección de ESC se implementó DENTRO de scripts/menu_pausa.py,
+en el update() de la propia clase MenuPausa (usando held_keys, no la
+función input() global). Se intentó primero desde esta función
+input() de main.py, pero Ursina deja de llamar a las funciones
+globales input()/update() del script principal mientras
+application.paused=True — por eso ESC abría el menú pero no lo podía
+cerrar. Moverlo al update() de la propia Entity (que tiene
+ignore_paused=True) resolvió el problema de raíz.
+
+
+ARCHIVO NUEVO: scripts/menu_pausa.py
+----------------------------------------
+Contiene toda la clase MenuPausa: el diseño visual (panel translúcido,
+esquinas estilo HUD táctico, botones "Reanudar" y "Salir del juego"),
+la detección de ESC, y la lógica de mostrar/ocultar + pausar/reanudar
+el juego. Este archivo no depende de nada más que Ursina — no hace
+falta tocar jugador.py, enemigo_base.py, gestor_arena.py, etc.

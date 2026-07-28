@@ -25,6 +25,7 @@ from scripts.villano_o import VillanoO
 from scripts.zombie import Zombie   
 from scripts.gestor_arena import GestorArena
 from scripts.editor_nivel import EditorNivel
+from scripts.menu_pausa import MenuPausa
 
 app = Ursina(title="Proyecto Nexo - Nivel 0")
 window.fullscreen = True
@@ -40,6 +41,9 @@ application.base.camLens.setFar(300) # Límite físico lejos
 color_bruma = color.rgba(0.01, 0.01, 0.02, 1.0) 
 application.base.setBackgroundColor(color_bruma) # El fondo es oscuridad pura
 window.color = color_bruma 
+
+# --- MENÚ DE PAUSA ---
+menu_pausa = MenuPausa()
 
 # Sistema de Oscuridad de Ursina (Usando la niebla pero negra)
 # Inicia a 15m y se vuelve 100% oscuridad impenetrable a los 100m
@@ -120,6 +124,7 @@ def iniciar_carga_pesada():
          
     actualizar_loading(0.3, "Invocando al Jugador Principal...")
     jugador_principal = Jugador(position=(0, 10, 0))
+    menu_pausa.jugador = jugador_principal
     
     # Inicializar el Editor de Niveles (F4 para abrir)
     editor = EditorNivel(jugador_principal)
@@ -240,7 +245,7 @@ if __name__ == '__main__':
 
 # Engine Loop: Evaluamos la generación de arenas y la distancia de renderizado (Culling)
 def update():
-    if not carga_terminada:
+    if not carga_terminada or application.paused:
         return
         
     z_jugador = jugador_principal.z
@@ -274,8 +279,7 @@ def update():
 
 # Tecla de escape de emergencia (Ya que el ratón estará bloqueado en la ventana)
 def input(key):
-    if key == 'escape':
-        application.quit()
+    pass
 
 if __name__ == '__main__':
     app.run()

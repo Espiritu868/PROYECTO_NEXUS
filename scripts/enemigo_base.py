@@ -275,16 +275,22 @@ class EnemigoBase(Entity):
         import random
         from scripts.powerups import PowerUp
         
-        # Probabilidad de soltar un objeto (ej. 60% de soltar algo)
-        if random.random() < 0.60:
-            # Puedes ajustar los pesos, por ejemplo es más común la munición o vida que un botiquín entero
-            tipo_drop = random.choices(
-                population=['vida', 'botiquin', 'municion'],
-                weights=[0.4, 0.2, 0.4],
-                k=1
-            )[0]
-            # Spawnear el powerup en la posición actual del enemigo
-            PowerUp(tipo=tipo_drop, position=self.position)
+        # Check if first enemy defeated
+        import __main__ as main
+        if not getattr(main, 'primer_enemigo_derrotado', False):
+            main.primer_enemigo_derrotado = True
+            PowerUp(tipo='arma', position=self.position)
+        else:
+            # Probabilidad de soltar un objeto (ej. 60% de soltar algo)
+            if random.random() < 0.60:
+                # Puedes ajustar los pesos, por ejemplo es más común la munición o vida que un botiquín entero
+                tipo_drop = random.choices(
+                    population=['vida', 'botiquin', 'municion'],
+                    weights=[0.4, 0.2, 0.4],
+                    k=1
+                )[0]
+                # Spawnear el powerup en la posición actual del enemigo
+                PowerUp(tipo=tipo_drop, position=self.position)
             
         # Detenemos al enemigo
         self.velocidad = 0

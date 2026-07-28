@@ -6,9 +6,16 @@ class PowerUp(Entity):
         self.tipo = tipo # 'vida', 'botiquin', 'municion'
         
         # Geometría básica para placeholder (fácil de reemplazar por modelo real)
-        self.model = 'cube'
-        self.scale = 0.5
         self.y = position.y + 0.5 # Flotar un poco sobre el suelo
+        
+        if self.tipo == 'arma':
+            self.model = 'assets/modelos/objetos_con_meshy/arma.glb'
+            self.scale = 0.3
+            self.color = color.white
+        else:
+            self.model = 'cube'
+            self.scale = 0.5
+            
         self.collider = 'box'
         
         # Colores identificativos provisionales
@@ -18,7 +25,7 @@ class PowerUp(Entity):
             self.color = color.green
         elif self.tipo == 'municion':
             self.color = color.yellow
-        else:
+        elif self.tipo != 'arma':
             self.color = color.white
             
         self.tiempo_vida = 15.0 # Desaparecer después de 15 segundos para no llenar la memoria
@@ -60,6 +67,10 @@ class PowerUp(Entity):
                 jugador.municion = 0
             jugador.municion += 30
             print(f"¡Recogiste Munición! (Munición actual: {jugador.municion})")
+        elif self.tipo == 'arma':
+            if hasattr(jugador, 'equipar_arma'):
+                jugador.equipar_arma()
+            print("¡Has recogido un arma!")
             
         # Actualizar la interfaz de usuario del jugador para reflejar cambios en salud
         if hasattr(jugador, 'texto_vida'):

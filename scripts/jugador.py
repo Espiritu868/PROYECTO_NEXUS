@@ -2,6 +2,35 @@ from ursina import Entity, camera, Vec3, held_keys, time, raycast, mouse, clamp,
 from direct.actor.Actor import Actor
 import math
 
+class Bala(Entity):
+    def __init__(self, posicion_inicial, direccion, dano, jugador_obj, **kwargs):
+        super().__init__(
+            model='sphere',
+            color=color.yellow,
+            scale=0.1,
+            position=posicion_inicial,
+            **kwargs
+        )
+        self.direccion = direccion
+        self.velocidad = 150
+        self.dano = dano
+        self.vida_util = 2.0
+        self.creacion = time.time()
+        self.jugador_obj = jugador_obj
+        
+    def update(self):
+        self.position += self.direccion * self.velocidad * time.dt
+        if time.time() - self.creacion > self.vida_util:
+            destroy(self)
+            return
+            
+        hit_info = raycast(self.position, self.direccion, distance=self.velocidad * time.dt, ignore=(self, self.jugador_obj, self.jugador_obj.modelo_visual, self.jugador_obj.pivot_camara))
+        if hit_info.hit:
+            entidad = hit_info.entity
+            if hasattr(entidad, 'recibir_dano'):
+                entidad.recibir_dano(self.dano)
+            destroy(self)
+
 class Jugador(Entity):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -90,6 +119,9 @@ class Jugador(Entity):
         self.dano_ataque = 35
         self.atacando = False
         self.rango_ataque = 4.5 # Metros
+        self.tiene_arma = False
+        self.arma_entidad = None
+        self.ultimo_disparo = 0
         
         # --- 7. LINTERNA TÁCTICA (SPOTLIGHT) ---
         from ursina import SpotLight
@@ -156,8 +188,11 @@ class Jugador(Entity):
         # Limitamos el zoom (mínimo 4m para no entrar al cuerpo, máximo 30m)
         self.distancia_camara_objetivo = clamp(self.distancia_camara_objetivo, 4.0, 30.0)
         
-        if key == 'left mouse down' and not self.atacando and not self.haciendo_dash:
-            self.iniciar_ataque()
+        if key == 'left mouse down':
+            if self.tiene_arma and not self.haciendo_dash:
+                self.disparar()
+            elif not self.atacando and not self.haciendo_dash:
+                self.iniciar_ataque()
                     
         if key == 'c' and self.dash_disponible and not self.haciendo_dash and not self.atacando:
             self.iniciar_dash()
@@ -185,6 +220,28 @@ class Jugador(Entity):
         if self.esta_muerto: return
         self.atacando = False
         self.cambiar_animacion('idle')
+
+    def equipar_arma(self):
+        if self.tiene_arma:
+            return
+        self.tiene_arma = True
+        # El arma flota al lado derecho del jugador
+        self.arma_entidad = Entity(parent=self, model='assets/modelos/objetos_con_meshy/arma.glb', position=(0.8, 1.2, 0.5), scale=0.1)
+        
+    def disparar(self):
+        if time.time() - self.ultimo_disparo < 0.2: # Cadencia de disparo
+            return
+        self.ultimo_disparo = time.time()
+        
+        origen_disparo = self.arma_entidad.world_position if self.arma_entidad else self.world_position + Vec3(0, 1.5, 0)
+        direccion_disparo = camera.forward # Dispara hacia donde mira la cámara
+        
+        # Retroceso visual básico
+        if self.arma_entidad:
+            self.arma_entidad.animate_position((0.8, 1.2, 0.3), duration=0.05)
+            self.arma_entidad.animate_position((0.8, 1.2, 0.5), duration=0.1, delay=0.05)
+        
+        Bala(posicion_inicial=origen_disparo, direccion=direccion_disparo, dano=35, jugador_obj=self)
 
     def iniciar_dash(self):
         dir_actual = Vec3(
