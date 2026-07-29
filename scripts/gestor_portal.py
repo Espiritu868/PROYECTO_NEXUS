@@ -41,7 +41,16 @@ class GestorPortal(Entity):
             self.hud.enabled = distancia_z < (self.offset_z / 2)
 
         if self.arma_lista and held_keys['f'] and self.hud.enabled:
-            self.teletransportar_jugador()
+            # Idea 1: El portal está bloqueado hasta que mueran todos los enemigos
+            import __main__ as main
+            if hasattr(main, 'gestores_arena') and self.indice_arena < len(main.gestores_arena):
+                arena = main.gestores_arena[self.indice_arena]
+                if arena.completada:
+                    self.teletransportar_jugador()
+                else:
+                    self.hud.actualizar_mision("¡DESPEJA LA ZONA PRIMERO!")
+            else:
+                self.teletransportar_jugador()
 
     # ============ MISIÓN: RECOLECTAR PIEZAS ============
     def recolectar_pieza(self, nombre):
@@ -54,8 +63,9 @@ class GestorPortal(Entity):
 
     # ============ MISIÓN: ELIMINAR JEFE ============
     def completar_mision_jefe(self):
-        self.arma_lista = True
-        self.hud.mision_completada("JEFE CAÍDO! Presiona [F]")
+        # En modo supervivencia infinita, el portal de salida se bloquea permanentemente
+        self.arma_lista = False 
+        self.hud.mision_completada("OBJETIVO CUMPLIDO - ¡SOBREVIVE!")
 
     # ============ MISIÓN: SELLAR GRIETAS (NUEVA) ============
     def sellar_grieta(self):

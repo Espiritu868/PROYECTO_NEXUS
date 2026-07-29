@@ -18,19 +18,21 @@ class PowerUp(Entity):
             
         self.collider = 'box'
         
-        # Colores identificativos provisionales
-        if self.tipo == 'vida':
-            self.color = color.red
-        elif self.tipo == 'botiquin':
+        # Colores identificativos
+        if self.tipo == 'max_salud':
             self.color = color.green
-        elif self.tipo == 'municion':
+        elif self.tipo == 'max_municion':
             self.color = color.yellow
+        elif self.tipo == 'insta_kill':
+            self.color = color.red
+        elif self.tipo == 'bomba':
+            self.color = color.orange
+        elif self.tipo == 'doble_cadencia':
+            self.color = color.magenta
+        elif self.tipo == 'recarga_rapida':
+            self.color = color.blue
         elif self.tipo == 'velocidad':
             self.color = color.azure
-        elif self.tipo == 'fuerza':
-            self.color = color.orange
-        elif self.tipo == 'escudo':
-            self.color = color.cyan
         elif self.tipo != 'arma':
             self.color = color.white
             
@@ -61,31 +63,37 @@ class PowerUp(Entity):
                     
     def recoger(self, jugador):
         # Lógica al recoger el powerup
-        if self.tipo == 'vida':
-            jugador.vida = min(jugador.vida + 10, 100)
-            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡+10 Vida!")
-            print("¡Recogiste una pequeña porción de Vida (+10)!")
-        elif self.tipo == 'botiquin':
-            jugador.vida = min(jugador.vida + 50, 100)
-            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡Botiquín (+50 Vida)!")
-            print("¡Recogiste un Botiquín (+50 Vida)!")
-        elif self.tipo == 'municion':
-            # Asumimos que el jugador tendrá atributo municion en el futuro o en otro script
-            if not hasattr(jugador, 'municion'):
-                jugador.municion = 0
-            jugador.municion += 30
-            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡Munición (+30)!")
-            print(f"¡Recogiste Munición! (Munición actual: {jugador.municion})")
+        if self.tipo == 'max_salud':
+            jugador.vida = 100
+            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡SALUD MÁXIMA!")
+        elif self.tipo == 'max_municion':
+            if hasattr(jugador, 'balas_cargador'):
+                jugador.balas_cargador = getattr(jugador, 'balas_cargador_max', 25)
+                jugador.balas_reserva = getattr(jugador, 'balas_reserva_max', 300)
+                if hasattr(jugador, 'actualizar_hud_municion'): jugador.actualizar_hud_municion()
+            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡MUNICIÓN MÁXIMA!")
+        elif self.tipo == 'bomba':
+            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡BOMBA TÁCTICA!")
+            from ursina import scene
+            for e in scene.entities:
+                if hasattr(e, 'vida') and hasattr(e, 'recibir_dano') and e != jugador and e.y > -100:
+                    e.recibir_dano(9999) # Matar a todos los enemigos activos
         elif self.tipo == 'arma':
             if hasattr(jugador, 'equipar_arma'):
-                jugador.equipar_arma()
-            if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡Arma conseguida!")
-            print("¡Has recogido un arma!")
-        elif self.tipo in ['velocidad', 'fuerza', 'escudo']:
+                jugador.equipar_arma(modelo_existente=self)
+            self.tiempo_vida = 999999
+            if hasattr(self, 'update'):
+                self.update = lambda: None
+            return
+        elif self.tipo in ['velocidad', 'insta_kill', 'doble_cadencia', 'recarga_rapida']:
             if hasattr(jugador, 'activar_powerup'):
-                nombres = {'velocidad': 'Súper Velocidad', 'fuerza': 'Fuerza Bruta', 'escudo': 'Escudo Invencible'}
-                jugador.activar_powerup(self.tipo, duracion=10.0, nombre_mostrar=nombres.get(self.tipo, self.tipo))
-            print(f"¡Recogiste PowerUp temporal: {self.tipo}!")
+                nombres = {
+                    'velocidad': 'Velocidad Extrema', 
+                    'insta_kill': 'Baja Instantánea', 
+                    'doble_cadencia': 'Doble Cadencia',
+                    'recarga_rapida': 'Recarga Rápida'
+                }
+                jugador.activar_powerup(self.tipo, duracion=20.0, nombre_mostrar=nombres.get(self.tipo, self.tipo))
             
         # Actualizar la interfaz de usuario del jugador para reflejar cambios en salud
         if hasattr(jugador, 'texto_vida'):
@@ -93,4 +101,7 @@ class PowerUp(Entity):
         if hasattr(jugador, 'barra_vida_fg'):
             jugador.barra_vida_fg.scale_x = max(jugador.vida / 100.0, 0.0)
             
+        # Reproducir sonido general de powerup si existiera
+        
+        # Destruir el powerup
         destroy(self)

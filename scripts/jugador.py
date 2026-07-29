@@ -123,6 +123,15 @@ class Jugador(Entity):
         self.arma_entidad = None
         self.ultimo_disparo = 0
         
+        # --- NUEVO: SISTEMA DE MUNICIÓN ---
+        self.balas_cargador_max = 25
+        self.balas_cargador = 25
+        self.balas_reserva_max = 300
+        self.balas_reserva = 300
+        self.recargando = False
+        self.texto_municion = Text(parent=camera.ui, text=f'{self.balas_cargador} / {self.balas_reserva}', position=(0.6, -0.42), origin=(0, 0), scale=1.5, color=color.white)
+        self.texto_municion.enabled = False
+        
         # --- 7. LINTERNA TÁCTICA (SPOTLIGHT) ---
         from ursina import SpotLight
         self.linterna = SpotLight(parent=camera, position=(0, 0, 0), color=color.white, shadows=False)
@@ -187,6 +196,10 @@ class Jugador(Entity):
                 self.disparar()
             elif not self.atacando and not self.haciendo_dash:
                 self.iniciar_ataque()
+                
+        if key == 'r' and self.tiene_arma and not self.recargando:
+            if self.balas_cargador < self.balas_cargador_max and self.balas_reserva > 0:
+                self.recargar()
                     
         if key == 'c' and self.dash_disponible and not self.haciendo_dash and not self.atacando:
             self.iniciar_dash()
@@ -215,16 +228,83 @@ class Jugador(Entity):
         self.atacando = False
         self.cambiar_animacion('idle')
 
-    def equipar_arma(self):
+    def equipar_arma(self, modelo_existente=None):
         if self.tiene_arma:
             return
         self.tiene_arma = True
+        self.texto_municion.enabled = True
         # El arma flota al lado derecho del jugador
-        self.arma_entidad = Entity(parent=self, model='assets/modelos/objetos_con_meshy/arma.glb', position=(0.8, 1.2, 0.5), scale=0.1)
+        if modelo_existente:
+            self.arma_entidad = modelo_existente
+            self.arma_entidad.parent = self
+            self.arma_entidad.collider = None
+            self.arma_entidad.position = (0.8, 1.2, 0.5)
+            self.arma_entidad.scale = 0.1
+            self.arma_entidad.rotation = (0, 0, 0)
+            if hasattr(self.arma_entidad, 'animations'):
+                for seq in self.arma_entidad.animations:
+                    seq.pause()
+                    seq.kill()
+            self.arma_entidad.animations = []
+        else:
+            self.arma_entidad = Entity(parent=self, model='assets/modelos/objetos_con_meshy/arma.glb', position=(0.8, 1.2, 0.5), scale=0.1)
         
+    def recargar(self):
+        self.recargando = True
+        self.texto_municion.text = "Recargando..."
+        self.texto_municion.color = color.yellow
+        
+        tiempo_recarga = 1.5
+        if 'recarga_rapida' in self.powerups_activos:
+            tiempo_recarga = 0.75
+            
+        from ursina import invoke
+        invoke(self._finalizar_recarga, delay=tiempo_recarga)
+
+    def _finalizar_recarga(self):
+        if self.esta_muerto: return
+        self.recargando = False
+        
+        balas_faltantes = self.balas_cargador_max - self.balas_cargador
+        if self.balas_reserva >= balas_faltantes:
+            self.balas_reserva -= balas_faltantes
+            self.balas_cargador = self.balas_cargador_max
+        else:
+            self.balas_cargador += self.balas_reserva
+            self.balas_reserva = 0
+            
+        self.texto_municion.color = color.white
+        self.actualizar_hud_municion()
+
+    def actualizar_hud_municion(self):
+        if not self.recargando:
+            self.texto_municion.text = f'{self.balas_cargador} / {self.balas_reserva}'
+            if self.balas_cargador <= 5:
+                self.texto_municion.color = color.red
+            else:
+                self.texto_municion.color = color.white
+
     def disparar(self):
-        if time.time() - self.ultimo_disparo < 0.2: # Cadencia de disparo
+        if self.recargando: return
+        
+        if self.balas_cargador <= 0:
+            if self.balas_reserva > 0:
+                self.recargar()
+            else:
+                self.texto_municion.text = "¡SIN MUNICIÓN!"
+                self.texto_municion.color = color.red
             return
+            
+        cadencia = 0.2
+        if 'doble_cadencia' in self.powerups_activos:
+            cadencia = 0.1
+            
+        if time.time() - self.ultimo_disparo < cadencia:
+            return
+        self.ultimo_disparo = time.time()
+        
+        self.balas_cargador -= 1
+        self.actualizar_hud_municion()
         self.ultimo_disparo = time.time()
         
         origen_disparo = self.arma_entidad.world_position if self.arma_entidad else self.world_position + Vec3(0, 1.5, 0)
@@ -322,7 +402,14 @@ class Jugador(Entity):
         y_pos = -0.45 + (idx * 0.05)
         
         bg = Entity(parent=camera.ui, model='quad', color=color.rgba(0,0,0,0.8), scale=(0.25, 0.02), position=(-0.47, y_pos))
-        fg_color = color.yellow if tipo == 'velocidad' else color.red if tipo == 'fuerza' else color.cyan
+        
+        # Asignar color dependiendo del tipo
+        fg_color = color.white
+        if tipo == 'velocidad': fg_color = color.azure
+        elif tipo == 'insta_kill': fg_color = color.red
+        elif tipo == 'doble_cadencia': fg_color = color.yellow
+        elif tipo == 'recarga_rapida': fg_color = color.blue
+        
         fg = Entity(parent=bg, model='quad', color=fg_color, scale=(1, 1), position=(-0.5, 0), origin=(-0.5, 0))
         texto = Text(parent=camera.ui, text=nombre_mostrar, position=(-0.60, y_pos + 0.015), origin=(-0.5, -0.5), scale=0.8, color=color.white)
         
@@ -334,10 +421,6 @@ class Jugador(Entity):
         if tipo == 'velocidad':
             self.velocidad_caminar *= 1.5
             self.velocidad_correr *= 1.5
-        elif tipo == 'fuerza':
-            self.dano_ataque *= 2
-        elif tipo == 'escudo':
-            self.invulnerable = True
 
     def desactivar_powerup(self, tipo):
         if tipo not in self.powerups_activos:
@@ -350,10 +433,6 @@ class Jugador(Entity):
         if tipo == 'velocidad':
             self.velocidad_caminar /= 1.5
             self.velocidad_correr /= 1.5
-        elif tipo == 'fuerza':
-            self.dano_ataque /= 2
-        elif tipo == 'escudo':
-            self.invulnerable = False
             
         self._reposicionar_powerups_ui()
 

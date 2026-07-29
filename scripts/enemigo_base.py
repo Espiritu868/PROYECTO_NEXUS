@@ -150,66 +150,67 @@ class EnemigoBase(Entity):
         en_movimiento = False
         
         # --- LÓGICA DE IA ---
-        if dist_jugador < self.distancia_deteccion:
-            # Mirar al jugador en 2D (solo rotación Y)
-            self.look_at_2d(self.jugador_objetivo.position, 'y')
+        # El enemigo SIEMPRE sabe dónde estás y te busca activamente
+        if True:
+            # 1. FIX: Evitar que el enemigo de vueltas locas si el jugador le salta encima
+            dx = self.jugador_objetivo.x - self.x
+            dz = self.jugador_objetivo.z - self.z
+            dist_2d_sq = dx*dx + dz*dz
+            
+            if dist_2d_sq > 1.0: # 1 metro cuadrado = 1 metro de radio
+                # Mirar al jugador en 2D (solo rotación Y)
+                self.look_at_2d(self.jugador_objetivo.position, 'y')
             
             # Comportamiento dependiendo de la distancia
-            if dist_jugador > self.distancia_ataque:
+            # Si el jugador está muy lejos en 3D, pero justo encima en 2D, NO avanzamos (evita sobrepasar y dar giros violentos)
+            if dist_jugador > self.distancia_ataque and dist_2d_sq > 1.0:
                 # 1. Caminar hacia el jugador
-                
-                # OPTIMIZACIÓN DE RAYCAST: Solo revisar obstáculos 5 veces por segundo, no 60.
-                if time.time() - self.tiempo_ultimo_raycast > 0.2:
-                    self.tiempo_ultimo_raycast = time.time()
-                    hit_obstaculo = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=2, ignore=(self, self.jugador_objetivo))
-                    self.obstaculo_enfrente = hit_obstaculo.hit and hit_obstaculo.distance <= 1.0
-                    
-                    if hit_obstaculo.hit:
-                        if self.en_suelo:
-                            # Intentar saltar por si es un obstáculo pequeño
-                            self.velocidad_y = self.velocidad_salto
-                            self.en_suelo = False
-                        
-                        import random
-                        if not hasattr(self, 'direccion_rodeo') or random.random() < 0.1:
-                            self.direccion_rodeo = random.choice([-1, 1])
                 
                 # MICRO-PAUSA POST ATAQUE: Si acaba de atacar, se queda quieto 1 segundo
                 if time.time() - self.ultimo_ataque > 1.0:
-                    if not self.obstaculo_enfrente:
-                        # Comprobar colisión antes de avanzar
-                        hit_avance = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=self.velocidad * time.dt + 0.5, ignore=(self, self.jugador_objetivo))
-                        if not hit_avance.hit:
-                            self.position += self.forward * self.velocidad * time.dt
-                            en_movimiento = True
+                    
+                    # 2. FIX: Lógica de Paredes/Rodeo combinada y fluida
+                    hit_avance = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=self.velocidad * time.dt + 0.8, ignore=(self, self.jugador_objetivo))
+                    
+                    if not hit_avance.hit:
+                        # Camino libre, avanzar directo hacia el jugador
+                        self.position += self.forward * self.velocidad * time.dt
+                        en_movimiento = True
                     else:
-                        # IA: EVASIÓN DE LABERINTO
-                        # Comprobar que no haya pared hacia donde nos vamos a deslizar
-                        dir_rodeo = getattr(self, 'direccion_rodeo', 1)
-                        direccion_lateral = self.right * dir_rodeo
+                        # Hay una pared. Intentar rodearla (Deslizarse por el borde)
+                        if self.en_suelo:
+                            self.velocidad_y = self.velocidad_salto # Saltar por si es un obstáculo pequeño
+                            self.en_suelo = False
                         
-                        hit_lateral = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_lateral, distance=(self.velocidad * 1.2) * time.dt + 1.0, ignore=(self, self.jugador_objetivo))
+                        import random
+                        # Cambiar de idea ocasionalmente para evitar ciclos infinitos
+                        if not hasattr(self, 'direccion_rodeo') or random.random() < 0.05:
+                            self.direccion_rodeo = random.choice([-1, 1])
+                            
+                        direccion_lateral = self.right * getattr(self, 'direccion_rodeo', 1)
+                        hit_lateral = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_lateral, distance=(self.velocidad * 1.5) * time.dt + 1.0, ignore=(self, self.jugador_objetivo))
                         
                         if not hit_lateral.hit:
-                            self.position += direccion_lateral * (self.velocidad * 1.2) * time.dt
+                            # Bordeando la pared a mayor velocidad para compensar el desvío
+                            self.position += direccion_lateral * (self.velocidad * 1.5) * time.dt
                             en_movimiento = True
                         else:
-                            # Si también hay pared a los lados (ej. esquina), damos la vuelta
+                            # Atrapado en una esquina (hay pared enfrente y a los lados) -> dar la vuelta
                             self.direccion_rodeo *= -1
-                        
+
                         # IA: ESQUIVA ALEATORIA (DASH LATERAL)
-                        # Cada 3 segundos, tiene un 30% de probabilidad de hacer un dash a un lado
+                        if not hasattr(self, 'ultimo_tiempo_esquiva'):
+                            self.ultimo_tiempo_esquiva = 0
+                            self.direccion_esquiva = 0
+                            
                         if time.time() - self.ultimo_tiempo_esquiva > 3.0:
-                            import random
                             self.ultimo_tiempo_esquiva = time.time()
                             if random.random() < 0.3:
                                 self.direccion_esquiva = random.choice([-1, 1])
                             else:
                                 self.direccion_esquiva = 0
                                 
-                        # Aplicar esquiva si está activa
                         if time.time() - self.ultimo_tiempo_esquiva < 0.5 and self.direccion_esquiva != 0:
-                            # Se mueve hacia los lados (self.right) a gran velocidad
                             self.position += self.right * (self.velocidad * 2.5) * self.direccion_esquiva * time.dt
             else:
                 # 2. Atacar al jugador
@@ -240,6 +241,10 @@ class EnemigoBase(Entity):
     def recibir_dano(self, cantidad):
         if self.curando:
             return
+            
+        # Insta-Kill check
+        if self.jugador_objetivo and hasattr(self.jugador_objetivo, 'powerups_activos') and 'insta_kill' in self.jugador_objetivo.powerups_activos:
+            cantidad = 9999
             
         if self.vida_maxima is None:
             self.vida_maxima = max(1, self.vida) # Captura la vida máxima inicial
@@ -286,34 +291,28 @@ class EnemigoBase(Entity):
     def curar(self):
         self.curando = True
         
-        # --- SISTEMA DE DROPS (POWERUPS PROVISIONALES) ---
+        # --- SISTEMA DE DROPS (POWERUPS ZOMBIES) ---
         import random
         from scripts.powerups import PowerUp
         
-        # Check if first enemy defeated
-        import __main__ as main
-        if not getattr(main, 'primer_enemigo_derrotado', False):
-            main.primer_enemigo_derrotado = True
-            PowerUp(tipo='arma', position=self.position)
-        else:
-            # Probabilidad de soltar un objeto (ej. 60% de soltar algo)
-            if random.random() < 0.60:
-                # Puedes ajustar los pesos, por ejemplo es más común la munición o vida que un botiquín entero
-                tipo_drop = random.choices(
-                    population=['vida', 'botiquin', 'municion', 'velocidad', 'fuerza', 'escudo'],
-                    weights=[0.3, 0.1, 0.3, 0.1, 0.1, 0.1],
-                    k=1
-                )[0]
-                # Spawnear el powerup en la posición actual del enemigo
-                PowerUp(tipo=tipo_drop, position=self.position)
+        # Probabilidad de soltar un objeto (ej. 60% de soltar algo)
+        if random.random() < 0.60:
+            tipo_drop = random.choices(
+                population=['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad'],
+                weights=[0.15, 0.20, 0.15, 0.10, 0.15, 0.15, 0.10],
+                k=1
+            )[0]
+            # Spawnear el powerup en la posición actual del enemigo
+            PowerUp(tipo=tipo_drop, position=self.position)
             
         # Detenemos al enemigo
         self.velocidad = 0
         self.jugador_objetivo = None 
         
-        # Ocultamos la barra de vida al morir
-        from ursina import destroy, color
-        destroy(self.barra_vida_fondo)
+        # Ocultamos la barra de vida al morir en lugar de destruirla para poder reciclarla
+        from ursina import color
+        self.barra_vida_fondo.enabled = False
+        self.barra_vida_roja.enabled = False
         
         if self.actor:
             self.cambiar_animacion('die', loop=False)
@@ -321,9 +320,16 @@ class EnemigoBase(Entity):
         else:
             self.modelo_visual.animate_color(color.yellow, duration=1.5)
         
-        # Destruir físicamente al enemigo después de que termine la animación de muerte
-        # Esto libera inmediatamente la memoria RAM y VRAM (Optimización extrema)
-        destroy(self, delay=1.5)
+        # En lugar de destruir al enemigo y causar lag al instanciar uno nuevo, lo reciclamos
+        from ursina import invoke
+        def hacer_reciclable():
+            self.listo_para_reciclar = True
+            self.position = (0, -2000, 0) # Ocultar muy profundo para activar culling espacial
+            self.enabled = False # Desactiva físicas, update y renderizado
+            if self.actor: self.actor.hide()
+            else: self.modelo_visual.enabled = False
+        invoke(hacer_reciclable, delay=1.5)
+
 
     def atacar(self):
         if time.time() - self.ultimo_ataque > self.tiempo_entre_ataques:

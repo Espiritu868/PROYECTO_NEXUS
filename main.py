@@ -125,6 +125,7 @@ def iniciar_carga_pesada():
          
     actualizar_loading(0.3, "Invocando al Jugador Principal...")
     jugador_principal = Jugador(position=(0, 10, 0))
+    jugador_principal.equipar_arma() # El jugador empieza con la pistola
     menu_pausa.jugador = jugador_principal
     pantalla_muerte.jugador = jugador_principal
     
@@ -166,7 +167,11 @@ def iniciar_carga_pesada():
 
         # El juego elige la misión al azar para esta arena
         misiones_disponibles = ["RECOLECTAR", "SELLAR_GRIETAS"]
-        tipo_mision_elegida = random.choice(misiones_disponibles)
+        
+        if indice == 2:
+            tipo_mision_elegida = "ELIMINAR_JEFE"
+        else:
+            tipo_mision_elegida = random.choice(misiones_disponibles)
 
         gestor_portal_arena = GestorPortal(
             offset_z=coordinador.offset_z, 
@@ -174,38 +179,9 @@ def iniciar_carga_pesada():
             indice_arena=indice
         )
 
-        #  SOLO generamos las piezas si la misión elegida es "RECOLECTAR"
-        if tipo_mision_elegida == "RECOLECTAR":
-            piezas_info = [
-                {"nombre": "Carcasa del Arma",  "modelo": "assets/modelos/carcasa_reducida.glb"},
-                {"nombre": "Pinzas Frontales",  "modelo": "assets/modelos/pinzas.glb"},
-                {"nombre": "Emisor portal",     "modelo": "assets/modelos/emisor_portal.glb"},  
-                {"nombre": "Base trasera",      "modelo": "assets/modelos/base_trasera.glb"}, 
-                {"nombre": "Carcasa lateral",   "modelo": "assets/modelos/Carcasa_lateral.glb"} 
-            ]
-
-            sectores = [
-                (random.randint(-140, -50), random.randint(-120, -20)), 
-                (random.randint(50, 140), random.randint(-120, 20)),
-                (random.randint(-70, 70), random.randint(60, 150)),  
-                (random.randint(50, 140), random.randint(60, 150)), 
-                (random.randint(50, 140), random.randint(-50, 20)), 
-            ]
-            random.shuffle(sectores)
-
-            for i, info in enumerate(piezas_info):
-                offset_x, offset_z = sectores[i]
-                pos_x = centro_arena_x + offset_x
-                pos_z = centro_arena_z + offset_z
-                
-                PiezaPortal(
-                    nombre_pieza=info["nombre"], 
-                    modelo_path=info["modelo"],  
-                    position=(pos_x, 1, pos_z), 
-                    gestor=gestor_portal_arena
-                ) 
-                
-        elif tipo_mision_elegida == "SELLAR_GRIETAS": 
+        #  SOLO generamos las grietas si la misión elegida es "SELLAR_GRIETAS".
+        #  Las piezas de "RECOLECTAR" ahora se sueltan de los enemigos en combate.
+        if tipo_mision_elegida == "SELLAR_GRIETAS": 
             sectores_grietas = [ 
                 (random.randint(-140, -50), random.randint(-120, -20)),
                 (random.randint(50, 140), random.randint(-120, 20)),
@@ -229,7 +205,8 @@ def iniciar_carga_pesada():
             puertas_frente=puertas_f,
             puertas_atras=puertas_a,
             limite_z=centro_arena_z - 200, # Entrada a la arena
-            indice_arena=indice
+            indice_arena=indice,
+            gestor_portal=gestor_portal_arena
         )
         gestores_arena.append(gestor)
 

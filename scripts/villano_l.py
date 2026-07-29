@@ -40,13 +40,13 @@ class VillanoL(EnemigoBase):
             from ursina import raycast
             hit_vision = raycast(origen, direction=direccion, distance=dist, ignore=(self,))
             
-            # Si el rayo choca con algo que NO es el jugador (por ejemplo, una pared), el láser se bloquea
-            if hit_vision.hit and hit_vision.entity != self.jugador_objetivo:
-                # Opcional: El láser choca contra la pared
-                dist = hit_vision.distance
-                daño_efectivo = False
-            else:
+            # Si el rayo choca exactamente con el jugador, hay daño. Si choca con otra cosa (pared) o se pierde, no hay daño.
+            if hit_vision.hit and hit_vision.entity == self.jugador_objetivo:
                 daño_efectivo = True
+            else:
+                daño_efectivo = False
+                if hit_vision.hit:
+                    dist = hit_vision.distance
             
             # Dibujamos el láser
             laser = Entity(
