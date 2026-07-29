@@ -8,33 +8,30 @@ class PowerUp(Entity):
         # Geometría básica para placeholder (fácil de reemplazar por modelo real)
         self.y = position.y + 0.5 # Flotar un poco sobre el suelo
         
+        mapa_modelos = {
+            'max_salud': 'salud_maxima.glb',
+            'max_municion': 'municion_maxima.glb',
+            'insta_kill': 'baja_instantanea.glb',
+            'bomba': 'bomba_atomica.glb',
+            'doble_cadencia': 'balas_rapidas.glb',
+            'recarga_rapida': 'recarga_rapida.glb',
+            'velocidad': 'velocidad_extrema.glb'
+        }
+        
         if self.tipo == 'arma':
             self.model = 'assets/modelos/objetos_con_meshy/arma.glb'
             self.scale = 0.3
             self.color = color.white
+        elif self.tipo in mapa_modelos:
+            self.model = f'assets/modelos/objetos_con_meshy/powerups/{mapa_modelos[self.tipo]}'
+            self.scale = 1.0 # Puedes ajustar la escala si se ven muy grandes o pequeños
+            self.color = color.white # Para respetar las texturas originales del GLB
         else:
             self.model = 'cube'
             self.scale = 0.5
+            self.color = color.white
             
         self.collider = 'box'
-        
-        # Colores identificativos
-        if self.tipo == 'max_salud':
-            self.color = color.green
-        elif self.tipo == 'max_municion':
-            self.color = color.yellow
-        elif self.tipo == 'insta_kill':
-            self.color = color.red
-        elif self.tipo == 'bomba':
-            self.color = color.orange
-        elif self.tipo == 'doble_cadencia':
-            self.color = color.magenta
-        elif self.tipo == 'recarga_rapida':
-            self.color = color.blue
-        elif self.tipo == 'velocidad':
-            self.color = color.azure
-        elif self.tipo != 'arma':
-            self.color = color.white
             
         self.tiempo_vida = 15.0 # Desaparecer después de 15 segundos para no llenar la memoria
         self.creacion = time.time()
