@@ -158,6 +158,10 @@ class Jugador(Entity):
         self.puntos_radar = [Entity(parent=self.radar_bg, model='circle', color=color.red, scale=(0.05, 0.05), enabled=False, z=-0.02) for _ in range(40)]
         self.punto_radar_mesa = Entity(parent=self.radar_bg, model='circle', color=color.yellow, scale=(0.06, 0.06), enabled=False, z=-0.04)
         
+        # --- NUEVO: SISTEMA DE MONEDAS ---
+        self.monedas = 0
+        self.texto_monedas = Text(parent=camera.ui, text=f'MONEDAS: {self.monedas}', position=(-0.7, 0.20), origin=(0, 0), scale=0.9, color=color.gold)
+        
         # --- 11. CHEATS ---
         self.invulnerable = False
         self.teclas_escritas = ""
@@ -348,6 +352,10 @@ class Jugador(Entity):
 
     def recuperar_dash(self):
         self.dash_disponible = True
+
+    def ganar_monedas(self, cantidad):
+        self.monedas += cantidad
+        self.texto_monedas.text = f'MONEDAS: {self.monedas}'
 
     def recibir_dano(self, cantidad):
         if self.esta_muerto or self.invulnerable: return

@@ -107,6 +107,8 @@ def self_destruct():
             jugador_principal.barra_vida_bg.enabled = True
             jugador_principal.texto_vida.enabled = True
             jugador_principal.radar_bg.enabled = True
+            if hasattr(jugador_principal, 'texto_monedas'):
+                jugador_principal.texto_monedas.enabled = True
 
 # Usar el sistema de tareas de Panda3D para verificar la destrucción
 def check_destruct(task):
@@ -137,6 +139,8 @@ def iniciar_carga_pesada():
     jugador_principal.barra_vida_bg.enabled = False
     jugador_principal.texto_vida.enabled = False
     jugador_principal.radar_bg.enabled = False
+    if hasattr(jugador_principal, 'texto_monedas'):
+        jugador_principal.texto_monedas.enabled = False
     
     # --- GENERACIÓN DE VILLANOS Y SISTEMA DE ARENAS ---
     for indice in range(coordinador.num_arenas):
@@ -154,7 +158,7 @@ def iniciar_carga_pesada():
             jefe_asignado = GolemBoss
         
         # Incrementar drásticamente la cantidad de enemigos
-        cantidad_enemigos = 15 + (indice * 10)
+        cantidad_enemigos =4  + (indice * 10)
             
         puertas_f = coordinador.puertas_frente_por_arena[indice]
         puertas_a = coordinador.puertas_atras_por_arena[indice]

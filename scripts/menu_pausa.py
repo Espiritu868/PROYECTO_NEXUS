@@ -214,6 +214,8 @@ class MenuPausa(Entity):
             self.jugador.mira.enabled = False
             self.jugador.barra_vida_bg.enabled = False
             self.jugador.texto_vida.enabled = False
+            if hasattr(self.jugador, 'texto_monedas'):
+                self.jugador.texto_monedas.enabled = False
 
     def reanudar(self):
         self.contenido.enabled = False
@@ -224,6 +226,8 @@ class MenuPausa(Entity):
             self.jugador.mira.enabled = True
             self.jugador.barra_vida_bg.enabled = True
             self.jugador.texto_vida.enabled = True
+            if hasattr(self.jugador, 'texto_monedas'):
+                self.jugador.texto_monedas.enabled = True
 
     def salir(self):
         application.quit()
@@ -316,6 +320,8 @@ class PantallaMuerte(Entity):
             self.jugador.mira.enabled = False
             self.jugador.barra_vida_bg.enabled = False
             self.jugador.texto_vida.enabled = False
+            if hasattr(self.jugador, 'texto_monedas'):
+                self.jugador.texto_monedas.enabled = False
 
     def reiniciar(self):
         if hasattr(self, 'on_reiniciar') and self.on_reiniciar:

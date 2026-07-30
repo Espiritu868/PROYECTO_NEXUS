@@ -307,6 +307,8 @@ class EnemigoBase(Entity):
             
         # Detenemos al enemigo
         self.velocidad = 0
+        if self.jugador_objetivo and hasattr(self.jugador_objetivo, 'ganar_monedas'):
+            self.jugador_objetivo.ganar_monedas(100)
         self.jugador_objetivo = None 
         
         # Ocultamos la barra de vida al morir en lugar de destruirla para poder reciclarla
