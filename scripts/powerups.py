@@ -16,7 +16,7 @@ class PowerUp(Entity):
         self.tipo = tipo # 'vida', 'botiquin', 'municion'
         
         # Geometría básica para placeholder (fácil de reemplazar por modelo real)
-        self.y = position.y + 0.5 # Flotar un poco sobre el suelo
+        self.y = position.y + 1.2 # Flotar más arriba sobre el suelo
         
         mapa_modelos = {
             'max_salud': 'salud_maxima.glb',
@@ -30,15 +30,15 @@ class PowerUp(Entity):
         
         if self.tipo == 'arma':
             self.model = 'assets/modelos/objetos_con_meshy/arma.glb'
-            self.scale = 0.3
+            self.scale = 0.2
             self.color = color.white
         elif self.tipo in mapa_modelos:
             self.model = f'assets/modelos/objetos_con_meshy/powerups/{mapa_modelos[self.tipo]}'
-            self.scale = 1.0 # Puedes ajustar la escala si se ven muy grandes o pequeños
-            self.color = color.white # Para respetar las texturas originales del GLB
+            self.scale = 0.65 # Reducido de 1.0 para que se vean más pequeños
+            self.color = color.white 
         else:
             self.model = 'cube'
-            self.scale = 0.5
+            self.scale = 0.35
             self.color = color.white
             
         self.collider = 'box'
@@ -49,41 +49,7 @@ class PowerUp(Entity):
         # Animación de flotar (girar constantemente)
         self.animate_rotation_y(360, duration=2, loop=True)
         
-        # Efecto 1: Halo verde flotante (Resplandor de BO2 Zombies)
-        self.halo = Entity(
-            parent=self,
-            model='quad',
-            texture='radial_gradient',
-            color=color.rgba(50, 255, 50, 150), # Verde
-            scale=2.5,
-            billboard=True,
-            transparent=True, # ¡CRUCIAL para que no sea sólido!
-            unlit=True
-        )
-        
-        # Efecto 2: Proyección de luz verde estática en el suelo
-        self.suelo_glow = Entity(
-            parent=self,
-            model='quad',
-            texture='radial_gradient',
-            color=color.rgba(50, 255, 50, 150),
-            scale=3.5,
-            y=-0.4,
-            rotation_x=90, # Acostado en el suelo
-            transparent=True,
-            unlit=True
-        )
-        
-        # Mezcla aditiva para que sumen luz al fondo sin tapar el modelo
-        from panda3d.core import ColorBlendAttrib
-        self.halo.node().setAttrib(ColorBlendAttrib.make(ColorBlendAttrib.MAdd))
-        self.halo.depth_write = False
-        self.suelo_glow.node().setAttrib(ColorBlendAttrib.make(ColorBlendAttrib.MAdd))
-        self.suelo_glow.depth_write = False
-        
-        # Luz dinámica adicional para iluminar al jugador o enemigos cercanos
-        from ursina import PointLight
-        self.luz = PointLight(parent=self, color=color.rgba(50, 255, 50, 255), y=0.5)
+        # Efectos eliminados para dejar solo el objeto base
         
     def update(self):
         # Desaparecer si pasa su tiempo de vida
