@@ -127,26 +127,54 @@ class GestorArena(Entity):
             from scripts.villano_o import VillanoO
             
             import math
-            # El Enjambre: Spawnean en un radio de 70 a 110 metros ALREDEDOR del jugador
-            angulo = random.uniform(0, 2 * math.pi)
-            distancia = random.uniform(70, 110)
-            
-            if self.jugador:
-                offset_x = self.jugador.x + math.cos(angulo) * distancia
-                offset_z = self.jugador.z + math.sin(angulo) * distancia
-            else:
-                offset_x = self.centro_x
-                offset_z = self.centro_z
+            posicion_aleatoria = None
+            for _ in range(10): # Intentar hasta 10 veces encontrar posición válida
+                angulo = random.uniform(0, 2 * math.pi)
+                distancia = random.uniform(70, 110)
                 
-            # Limitar a los bordes de la arena para que no spawneen fuera
-            min_x, max_x = self.centro_x - 180, self.centro_x + 180
-            min_z, max_z = self.centro_z - 180, self.centro_z + 180
+                if self.jugador:
+                    offset_x = self.jugador.x + math.cos(angulo) * distancia
+                    offset_z = self.jugador.z + math.sin(angulo) * distancia
+                else:
+                    offset_x = self.centro_x
+                    offset_z = self.centro_z
+                    
+                # Limitar a los bordes de la arena para que no spawneen fuera
+                min_x, max_x = self.centro_x - 180, self.centro_x + 180
+                min_z, max_z = self.centro_z - 180, self.centro_z + 180
+                
+                pos_x = max(min_x, min(max_x, offset_x))
+                pos_z = max(min_z, min(max_z, offset_z))
+                
+                # Prevenir spawn dentro de los muros (AABB simple para los muros internos de la arena)
+                rel_x = pos_x - self.centro_x
+                rel_z = pos_z - self.centro_z
+                
+                en_muro = False
+                margen = 5 # Margen de seguridad para no pegarse a los muros
+                
+                # Check Muros horizontales (Eje X)
+                if (-200 - margen <= rel_x <= -50 + margen) or (50 - margen <= rel_x <= 200 + margen):
+                    if (-100 - 1 - margen <= rel_z <= -100 + 1 + margen): en_muro = True
+                    if (100 - 1 - margen <= rel_z <= 100 + 1 + margen): en_muro = True
+                if (-170 - margen <= rel_x <= -50 + margen) or (50 - margen <= rel_x <= 170 + margen):
+                    if (-1 - margen <= rel_z <= 1 + margen): en_muro = True
+                    
+                # Check Muros verticales (Eje Z)
+                if (-100 - 1 - margen <= rel_x <= -100 + 1 + margen):
+                    if (-150 - margen <= rel_z <= 50 + margen): en_muro = True
+                if (100 - 1 - margen <= rel_x <= 100 + 1 + margen):
+                    if (-50 - margen <= rel_z <= 150 + margen): en_muro = True
+                    
+                if not en_muro:
+                    posicion_aleatoria = (pos_x, 0, pos_z)
+                    break
             
-            pos_x = max(min_x, min(max_x, offset_x))
-            pos_z = max(min_z, min(max_z, offset_z))
-            
-            posicion_aleatoria = (pos_x, 0, pos_z)
-            rotacion_aleatoria = random.randint(0, 360)  
+            if not posicion_aleatoria:
+                # Fallback al centro (el centro está vacío)
+                posicion_aleatoria = (self.centro_x, 0, self.centro_z)
+                
+            rotacion_aleatoria = random.randint(0, 360)
 
             # Intentar reciclar un enemigo existente antes de crear uno nuevo para evitar lag
             reciclados = [e for e in self.enemigos if getattr(e, 'listo_para_reciclar', False)]

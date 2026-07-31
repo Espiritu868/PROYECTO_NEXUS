@@ -94,6 +94,8 @@ def iniciar_carga_pesada():
     coordinador.construir_nivel_base()
     
     # Instanciar al jugador (Lo soltamos un poco arriba en Y=10 para que caiga y toque el suelo)
+    from scripts.powerups import precargar_modelos_powerups
+    precargar_modelos_powerups()
     jugador_principal = Jugador(position=(0, 10, 0))
     
     # --- GENERACIÓN DE VILLANOS Y SISTEMA DE ARENAS ---
@@ -130,7 +132,7 @@ def iniciar_carga_pesada():
             
         else:
             # --- SPAWN NORMAL (OTRAS ARENAS) ---
-            cantidad_enemigos = 4 + (indice * 3)
+            cantidad_enemigos = min(15 + (indice * 10), 150)
             for _ in range(cantidad_enemigos):
                 offset_x = random.choice([random.randint(-150, -50), random.randint(50, 150)])
                 offset_z = random.randint(-150, 150)

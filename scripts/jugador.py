@@ -160,7 +160,16 @@ class Jugador(Entity):
         
         # --- NUEVO: SISTEMA DE MONEDAS ---
         self.monedas = 0
-        self.texto_monedas = Text(parent=camera.ui, text=f'MONEDAS: {self.monedas}', position=(-0.7, 0.20), origin=(0, 0), scale=0.9, color=color.gold)
+        self.texto_monedas = Text(parent=camera.ui, text=f'MONEDAS: {self.monedas}', position=(-0.7, 0.15), origin=(0, 0), scale=0.9, color=color.gold)
+        
+        # --- ENEMIGOS RESTANTES ---
+        self.texto_enemigos = Text(parent=camera.ui, text='ENEMIGOS: 0', position=(-0.7, 0.20), origin=(0, 0), scale=0.9, color=color.red)
+        
+        # --- NUEVO: SISTEMA DE RONDAS (IMÁGENES) ---
+        self.ronda_actual = 1
+        self.img_ronda_1 = Entity(parent=camera.ui, model='quad', texture='scripts/backgrounds/rouds/I.png', scale=(0.2, 0.2), position=(-0.73, -0.42))
+        self.img_ronda_2 = Entity(parent=camera.ui, model='quad', texture=None, scale=(0.2, 0.2), position=(-0.73, -0.42), enabled=False)
+        self.img_ronda_3 = Entity(parent=camera.ui, model='quad', texture=None, scale=(0.2, 0.2), position=(-0.73, -0.42), enabled=False)
         
         # --- 11. CHEATS ---
         self.invulnerable = False
@@ -207,6 +216,43 @@ class Jugador(Entity):
                     
         if key == 'c' and self.dash_disponible and not self.haciendo_dash and not self.atacando:
             self.iniciar_dash()
+
+    def actualizar_hud_ronda(self):
+        ronda = self.ronda_actual
+        from ursina import load_texture
+        if ronda <= 9:
+            romanos = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]
+            texto = romanos[ronda - 1]
+            self.img_ronda_1.texture = load_texture(f'scripts/backgrounds/rouds/{texto}.png')
+            self.img_ronda_1.position = (-0.73, -0.42)
+            self.img_ronda_1.enabled = True
+            
+            self.img_ronda_2.enabled = False
+            self.img_ronda_3.enabled = False
+        else:
+            ronda_str = str(ronda)
+            if len(ronda_str) == 2:
+                self.img_ronda_1.texture = load_texture(f'scripts/backgrounds/rouds/{ronda_str[0]}.png')
+                self.img_ronda_1.position = (-0.78, -0.42)
+                self.img_ronda_1.enabled = True
+                
+                self.img_ronda_2.texture = load_texture(f'scripts/backgrounds/rouds/{ronda_str[1]}.png')
+                self.img_ronda_2.position = (-0.68, -0.42)
+                self.img_ronda_2.enabled = True
+                
+                self.img_ronda_3.enabled = False
+            elif len(ronda_str) >= 3:
+                self.img_ronda_1.texture = load_texture(f'scripts/backgrounds/rouds/{ronda_str[0]}.png')
+                self.img_ronda_1.position = (-0.81, -0.42)
+                self.img_ronda_1.enabled = True
+                
+                self.img_ronda_2.texture = load_texture(f'scripts/backgrounds/rouds/{ronda_str[1]}.png')
+                self.img_ronda_2.position = (-0.73, -0.42)
+                self.img_ronda_2.enabled = True
+                
+                self.img_ronda_3.texture = load_texture(f'scripts/backgrounds/rouds/{ronda_str[2]}.png')
+                self.img_ronda_3.position = (-0.65, -0.42)
+                self.img_ronda_3.enabled = True
 
     def iniciar_ataque(self):
         self.atacando = True
@@ -473,6 +519,24 @@ class Jugador(Entity):
 
         for tipo in powerups_a_eliminar:
             self.desactivar_powerup(tipo)
+                
+        # --- ACTUALIZAR RONDA Y ENEMIGOS ---
+        import __main__ as main
+        if hasattr(main, 'coordinador') and main.coordinador:
+            indice_arena = int(round(self.z / main.coordinador.offset_z))
+            
+            if hasattr(main, 'gestores_arena') and 0 <= indice_arena < len(main.gestores_arena):
+                gestor = main.gestores_arena[indice_arena]
+                
+                ronda_calculada = getattr(gestor, 'ronda_actual', 1)
+                
+                if ronda_calculada != self.ronda_actual:
+                    self.ronda_actual = ronda_calculada
+                    self.actualizar_hud_ronda()
+                    
+                vivos = sum(1 for e in gestor.enemigos if e.enabled and hasattr(e, 'vida') and e.vida > 0)
+                faltantes = vivos + getattr(gestor, 'spawns_pendientes', 0)
+                self.texto_enemigos.text = f'ENEMIGOS: {faltantes}'
                 
         if self.esta_muerto:
             return

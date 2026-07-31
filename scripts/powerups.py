@@ -1,5 +1,15 @@
 from ursina import Entity, color, time, Vec3, destroy, distance
 
+def precargar_modelos_powerups():
+    from ursina import load_model
+    mapa_modelos = [
+        'salud_maxima.glb', 'municion_maxima.glb', 'baja_instantanea.glb',
+        'bomba_atomica.glb', 'balas_rapidas.glb', 'recarga_rapida.glb',
+        'velocidad_extrema.glb'
+    ]
+    for archivo in mapa_modelos:
+        load_model(f'assets/modelos/objetos_con_meshy/powerups/{archivo}')
+
 class PowerUp(Entity):
     def __init__(self, tipo, position, **kwargs):
         super().__init__(position=position, **kwargs)
@@ -38,6 +48,42 @@ class PowerUp(Entity):
         
         # Animación de flotar (girar constantemente)
         self.animate_rotation_y(360, duration=2, loop=True)
+        
+        # Efecto 1: Halo verde flotante (Resplandor de BO2 Zombies)
+        self.halo = Entity(
+            parent=self,
+            model='quad',
+            texture='radial_gradient',
+            color=color.rgba(50, 255, 50, 150), # Verde
+            scale=2.5,
+            billboard=True,
+            transparent=True, # ¡CRUCIAL para que no sea sólido!
+            unlit=True
+        )
+        
+        # Efecto 2: Proyección de luz verde estática en el suelo
+        self.suelo_glow = Entity(
+            parent=self,
+            model='quad',
+            texture='radial_gradient',
+            color=color.rgba(50, 255, 50, 150),
+            scale=3.5,
+            y=-0.4,
+            rotation_x=90, # Acostado en el suelo
+            transparent=True,
+            unlit=True
+        )
+        
+        # Mezcla aditiva para que sumen luz al fondo sin tapar el modelo
+        from panda3d.core import ColorBlendAttrib
+        self.halo.node().setAttrib(ColorBlendAttrib.make(ColorBlendAttrib.MAdd))
+        self.halo.depth_write = False
+        self.suelo_glow.node().setAttrib(ColorBlendAttrib.make(ColorBlendAttrib.MAdd))
+        self.suelo_glow.depth_write = False
+        
+        # Luz dinámica adicional para iluminar al jugador o enemigos cercanos
+        from ursina import PointLight
+        self.luz = PointLight(parent=self, color=color.rgba(50, 255, 50, 255), y=0.5)
         
     def update(self):
         # Desaparecer si pasa su tiempo de vida

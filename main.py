@@ -109,6 +109,14 @@ def self_destruct():
             jugador_principal.radar_bg.enabled = True
             if hasattr(jugador_principal, 'texto_monedas'):
                 jugador_principal.texto_monedas.enabled = True
+            if hasattr(jugador_principal, 'img_ronda_1'):
+                jugador_principal.img_ronda_1.enabled = True
+            if hasattr(jugador_principal, 'img_ronda_2') and jugador_principal.ronda_actual >= 10:
+                jugador_principal.img_ronda_2.enabled = True
+            if hasattr(jugador_principal, 'img_ronda_3') and jugador_principal.ronda_actual >= 100:
+                jugador_principal.img_ronda_3.enabled = True
+            if hasattr(jugador_principal, 'texto_enemigos'):
+                jugador_principal.texto_enemigos.enabled = True
 
 # Usar el sistema de tareas de Panda3D para verificar la destrucción
 def check_destruct(task):
@@ -126,6 +134,10 @@ def iniciar_carga_pesada():
     coordinador.construir_nivel_base()
          
     actualizar_loading(0.3, "Invocando al Jugador Principal...")
+    
+    from scripts.powerups import precargar_modelos_powerups
+    precargar_modelos_powerups()
+    
     jugador_principal = Jugador(position=(0, 10, 0))
     jugador_principal.equipar_arma() # El jugador empieza con la pistola
     menu_pausa.jugador = jugador_principal
@@ -141,6 +153,12 @@ def iniciar_carga_pesada():
     jugador_principal.radar_bg.enabled = False
     if hasattr(jugador_principal, 'texto_monedas'):
         jugador_principal.texto_monedas.enabled = False
+    if hasattr(jugador_principal, 'img_ronda_1'):
+        jugador_principal.img_ronda_1.enabled = False
+        jugador_principal.img_ronda_2.enabled = False
+        jugador_principal.img_ronda_3.enabled = False
+    if hasattr(jugador_principal, 'texto_enemigos'):
+        jugador_principal.texto_enemigos.enabled = False
     
     # --- GENERACIÓN DE VILLANOS Y SISTEMA DE ARENAS ---
     for indice in range(coordinador.num_arenas):
@@ -158,7 +176,7 @@ def iniciar_carga_pesada():
             jefe_asignado = GolemBoss
         
         # Incrementar drásticamente la cantidad de enemigos
-        cantidad_enemigos =4  + (indice * 10)
+        cantidad_enemigos = min(15 + (indice * 10), 150)
             
         puertas_f = coordinador.puertas_frente_por_arena[indice]
         puertas_a = coordinador.puertas_atras_por_arena[indice]
