@@ -37,25 +37,26 @@ class Jugador(Entity):
         self.scale = (1, 1, 1)
         self.origin_y = 0 
         
-        # --- 1. CARGA DEL MODELO ANIMADO GLB (TRABAJADOR DE PLANTA) ---
-        ruta_base = "assets/modelos/personajes_principales/trabajador_de_planta/"
+        # --- 1. CARGA DEL MODELO ANIMADO GLB (AGENTE SAS) ---
+        ruta_base = "assets/modelos/personajes_principales/agente_sas/"
         
         self.modelo_visual = Entity(parent=self, rotation_y=180) # Rotamos 180 para que mire al frente
         
         try:
             self.actor = Actor(
-                ruta_base + "worker_idle.glb",
+                ruta_base + "sas_modelo.glb",
                 {
-                    'idle': ruta_base + 'worker_idle.glb',
-                    'walk': ruta_base + 'worker_walk.glb',
-                    'walk_back': ruta_base + 'worker_walk_back.glb',
-                    'run': ruta_base + 'worker_run.glb',
-                    'dash': ruta_base + 'worker_dash.glb',
-                    'slash': ruta_base + 'worker_slash.glb',
-                    'uppercut': ruta_base + 'worker_uppercut.glb',
-                    'kick': ruta_base + 'worker_kick.glb',
-                    'hit': ruta_base + 'worker_hit.glb',
-                    'dead': ruta_base + 'worker_dead.glb'
+                    'idle': ruta_base + 'sas_idle.glb',
+                    'walk': ruta_base + 'sas_walk.glb',
+                    'walk_back': ruta_base + 'sas_walk_back.glb',
+                    'run': ruta_base + 'sas_run.glb',
+                    'dash': ruta_base + 'sas_dash.glb',
+                    'jump': ruta_base + 'sas_jump.glb',
+                    'slash': ruta_base + 'sas_idle.glb', # Fallback temporal
+                    'uppercut': ruta_base + 'sas_idle.glb', # Fallback temporal
+                    'kick': ruta_base + 'sas_idle.glb', # Fallback temporal
+                    'hit': ruta_base + 'sas_hit.glb',
+                    'dead': ruta_base + 'sas_dead.glb'
                 }
             )
             self.actor.reparentTo(self.modelo_visual)
@@ -72,9 +73,8 @@ class Jugador(Entity):
             except:
                 pass
             
-            # Amplificamos un poco la escala (1.6) para que sea tamaño humano promedio
-            self.modelo_visual.scale = 1.6 
-            
+            # Amplificamos la escala (120) validada por el usuario
+            self.modelo_visual.scale = (120, 120, 120)           
         except Exception as e:
             print(f"=================================")
             print(f"ERROR CARGANDO EL JUGADOR GLB: {e}")
@@ -89,7 +89,7 @@ class Jugador(Entity):
         self.velocidad_correr = 16
         
         self.gravedad = 60
-        self.velocidad_salto = 22
+        self.velocidad_salto = 12
         self.velocidad_y = 0
         self.en_suelo = False
         
@@ -185,6 +185,13 @@ class Jugador(Entity):
     def input(self, key):
         if self.esta_muerto: return
         
+        # --- TEST ESCALA ---
+        if key == '+':
+            self.modelo_visual.scale *= 1.5
+            print(f"NUEVA ESCALA: {self.modelo_visual.scale}")
+        elif key == '-':
+            self.modelo_visual.scale *= 0.75
+            print(f"NUEVA ESCALA: {self.modelo_visual.scale}")
         # CHEAT CODE: ASNAEB
         if len(key) == 1 and key.isalpha():
             self.teclas_escritas += key.lower()
@@ -434,7 +441,7 @@ class Jugador(Entity):
         # Prevenir reiniciar la misma animación si ya está corriendo
         if self.estado_animacion != nombre_animacion:
             # Si es hit, play. Si es movimiento, loop.
-            if nombre_animacion in ['hit', 'dead', 'uppercut', 'slash', 'kick', 'dash']:
+            if nombre_animacion in ['hit', 'dead', 'uppercut', 'slash', 'kick', 'dash', 'jump']:
                 self.actor.play(nombre_animacion)
             else:
                 self.actor.loop(nombre_animacion)
@@ -611,17 +618,29 @@ class Jugador(Entity):
         # --- FISICAS DE COLISIÓN HORIZONTAL ---
         if desplazamiento.x != 0:
             dir_x = 1 if desplazamiento.x > 0 else -1
-            if not raycast(self.position + Vec3(0, 1.0, 0), direction=(dir_x, 0, 0), distance=1.0, ignore=(self,)).hit:
+            dist_x = abs(desplazamiento.x) + 0.35
+            hit_x = raycast(self.position + Vec3(0, 1.0, 0), direction=(dir_x, 0, 0), distance=dist_x, ignore=(self,))
+            if not hit_x.hit or hit_x.distance <= 0.05:
                 self.x += desplazamiento.x
+            elif hasattr(hit_x.entity, 'jugador_objetivo'):
+                # Empujar suavemente al enemigo para abrirnos paso si estamos acorralados
+                hit_x.entity.x += desplazamiento.x * 0.8
+                self.x += desplazamiento.x * 0.8
                 
         if desplazamiento.z != 0:
             dir_z = 1 if desplazamiento.z > 0 else -1
-            if not raycast(self.position + Vec3(0, 1.0, 0), direction=(0, 0, dir_z), distance=1.0, ignore=(self,)).hit:
+            dist_z = abs(desplazamiento.z) + 0.35
+            hit_z = raycast(self.position + Vec3(0, 1.0, 0), direction=(0, 0, dir_z), distance=dist_z, ignore=(self,))
+            if not hit_z.hit or hit_z.distance <= 0.05:
                 self.z += desplazamiento.z
+            elif hasattr(hit_z.entity, 'jugador_objetivo'):
+                hit_z.entity.z += desplazamiento.z * 0.8
+                self.z += desplazamiento.z * 0.8
 
         # --- FISICAS DE GRAVEDAD Y SALTO ---
         if held_keys['space'] and self.en_suelo and not self.atacando and not self.haciendo_dash:
             self.velocidad_y = self.velocidad_salto
+            self.cambiar_animacion('jump')
             self.en_suelo = False
             
         self.velocidad_y -= self.gravedad * dt

@@ -47,8 +47,8 @@ class EnemigoBase(Entity):
             
         # --- COLISIONADOR ---
         from ursina import BoxCollider
-        # Al no tener 'model' propio (sino un hijo escalado), definimos su tamaño de hitbox a mano.
-        self.collider = BoxCollider(self, center=Vec3(0, 1, 0), size=Vec3(2, 3, 2))
+        # Hitbox más ajustada (1.2 en lugar de 2.0) para evitar bloquear el paso en pasillos
+        self.collider = BoxCollider(self, center=Vec3(0, 1, 0), size=Vec3(1.2, 3, 1.2))
         
         # --- ATRIBUTOS BASE ---
         self.velocidad = 0

@@ -129,7 +129,7 @@ application.base.taskMgr.add(check_destruct, 'destruct_loading_screen')
 def iniciar_carga_pesada():
     global carga_terminada, jugador_principal, coordinador, gestores_arena
     
-    actualizar_loading(0.1, "Generando masivo patio exterior...")
+    actualizar_loading(0.1, "Generando el Nivel 0...")
     coordinador = CoordinadorEscenario()
     coordinador.construir_nivel_base()
          
