@@ -59,16 +59,13 @@ class PowerUp(Entity):
             
         # Importación local para evitar dependencias circulares
         from scripts.jugador import Jugador
-        from ursina import scene
-        
         # Comprobar colisión por distancia (más óptimo para placeholders rápidos que el sistema de físicas complejo)
-        for e in scene.entities:
-            if isinstance(e, Jugador):
-                # Si el jugador está cerca (radio de recogida)
-                dist = distance(self.position, e.position)
-                if dist < 2.0:
-                    self.recoger(e)
-                    break
+        jugador = Jugador.instancia
+        if jugador:
+            # Si el jugador está cerca (radio de recogida)
+            dist = distance(self.position, jugador.position)
+            if dist < 2.0:
+                self.recoger(jugador)
                     
     def recoger(self, jugador):
         # Lógica al recoger el powerup

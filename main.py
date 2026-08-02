@@ -117,6 +117,8 @@ def self_destruct():
                 jugador_principal.img_ronda_3.enabled = True
             if hasattr(jugador_principal, 'texto_enemigos'):
                 jugador_principal.texto_enemigos.enabled = True
+            if hasattr(jugador_principal, 'hud_armas_bg'):
+                jugador_principal.hud_armas_bg.enabled = True
 
 # Usar el sistema de tareas de Panda3D para verificar la destrucción
 def check_destruct(task):
@@ -151,6 +153,8 @@ def iniciar_carga_pesada():
     jugador_principal.barra_vida_bg.enabled = False
     jugador_principal.texto_vida.enabled = False
     jugador_principal.radar_bg.enabled = False
+    if hasattr(jugador_principal, 'hud_armas_bg'):
+        jugador_principal.hud_armas_bg.enabled = False
     if hasattr(jugador_principal, 'texto_monedas'):
         jugador_principal.texto_monedas.enabled = False
     if hasattr(jugador_principal, 'img_ronda_1'):
@@ -320,7 +324,8 @@ def update():
                 if enemigo.enabled: enemigo.enabled = False
         else:
             for enemigo in gestor.enemigos:
-                if not enemigo.enabled: enemigo.enabled = True
+                if not enemigo.enabled and not getattr(enemigo, 'listo_para_reciclar', False):
+                    enemigo.enabled = True
 
 # Tecla de escape de emergencia (Ya que el ratón estará bloqueado en la ventana)
 def input(key):

@@ -212,7 +212,8 @@ def update():
                 if enemigo.enabled: enemigo.enabled = False
         else:
             for enemigo in gestor.enemigos:
-                if not enemigo.enabled: enemigo.enabled = True
+                if not enemigo.enabled and not getattr(enemigo, 'listo_para_reciclar', False):
+                    enemigo.enabled = True
 
 # Tecla de escape de emergencia (Ya que el ratón estará bloqueado en la ventana)
 def input(key):

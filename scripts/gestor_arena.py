@@ -43,11 +43,7 @@ class GestorArena(Entity):
 
     def buscar_jugador(self):
         from scripts.jugador import Jugador
-        from ursina import scene
-        for e in scene.entities:
-            if isinstance(e, Jugador):
-                return e
-        return None
+        return Jugador.instancia
 
     def update(self):
         if not self.jugador:

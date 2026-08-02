@@ -102,10 +102,7 @@ class EnemigoBase(Entity):
     def buscar_jugador(self):
         # Importación local para evitar importaciones circulares
         from scripts.jugador import Jugador
-        for e in scene.entities:
-            if isinstance(e, Jugador):
-                return e
-        return None
+        return Jugador.instancia
 
     def cambiar_animacion(self, anim, loop=True):
         if self.actor and self.estado_animacion != anim:
@@ -130,7 +127,9 @@ class EnemigoBase(Entity):
                 
         # --- CULLING ESPACIAL DE RENDIMIENTO ---
         # Si el enemigo está a más de 1000 metros del jugador, no calculamos IA ni físicas (Ahorra muchísimos FPS)
-        if distance(self.position, self.jugador_objetivo.position) > 1000:
+        dx_cull = self.position.x - self.jugador_objetivo.x
+        dz_cull = self.position.z - self.jugador_objetivo.z
+        if (dx_cull*dx_cull + dz_cull*dz_cull) > 1000000:
             return
 
         dist_jugador = distance(self, self.jugador_objetivo)
@@ -147,6 +146,16 @@ class EnemigoBase(Entity):
             self.y += self.velocidad_y * time.dt
             self.en_suelo = False
             
+        # --- REPELENCIA FÍSICA SUAVE ---
+        # Si el enemigo y el jugador se empalman mucho (< 1.5 metros), se empuja suavemente al enemigo hacia afuera
+        # Esto evita que el jugador se quede "atascado" dentro de la hitbox del enemigo
+        if dist_jugador < 1.5:
+            vector_empuje = self.position - self.jugador_objetivo.position
+            vector_empuje.y = 0
+            if vector_empuje.length() > 0:
+                # Un empuje de 4 m/s que escala con el framerate
+                self.position += vector_empuje.normalized() * 4.0 * time.dt
+                
         en_movimiento = False
         
         # --- LÓGICA DE IA ---
@@ -342,23 +351,7 @@ class EnemigoBase(Entity):
                 else:
                     self.jugador_objetivo.vida -= 10
                     
-                self.jugador_objetivo.texto_vida.text = f'SALUD: {self.jugador_objetivo.vida}'
-                
-                if self.jugador_objetivo.vida < 40:
-                    from ursina import color
-                    self.jugador_objetivo.texto_vida.color = color.red
-                    
-                if self.jugador_objetivo.vida <= 0:
-                    print("¡HAS MUERTO!")
-                    from ursina import scene, application
-                    encontrado = False
-                    for e in scene.entities:
-                        if type(e).__name__ == 'PantallaMuerte':
-                            e.mostrar()
-                            encontrado = True
-                            break
-                    if not encontrado:
-                        application.quit()
+                # HUD and Death logic is now handled in Jugador.recibir_dano()
                     
             self.ultimo_ataque = time.time()
             

@@ -43,7 +43,7 @@ class VillanoO(EnemigoBase):
             return
         self.preparando = False
         self.embistiendo = True
-        self.velocidad = 45 # Velocidad de embestida
+        self.velocidad = 22 # Velocidad de embestida reducida (antes 45)
         
         invoke(self.terminar_embestida, delay=0.5) # Embiste durante medio segundo
         

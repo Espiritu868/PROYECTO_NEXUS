@@ -29,7 +29,7 @@ class PiezaPortal(Entity):
         from scripts.jugador import Jugador
         from ursina import scene
         
-        jugador = next((e for e in scene.entities if isinstance(e, Jugador)), None)
+        jugador = Jugador.instancia
         
         if jugador:
             if distance(self.position, jugador.position) < 3:

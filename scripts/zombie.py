@@ -21,7 +21,7 @@ class Zombie(EnemigoBase):
         # Si su vida baja de la mitad, se vuelve loco y corre rapidísimo
         if self.vida_maxima and self.vida < (self.vida_maxima / 2) and not self.frenesi and not self.curando:
             self.frenesi = True
-            self.velocidad = self.velocidad_normal * 2.5 
+            self.velocidad = self.velocidad_normal * 1.3
             
             
             # Efecto visual de furia (Usamos set_color_scale)

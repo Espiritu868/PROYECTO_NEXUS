@@ -32,9 +32,14 @@ class GestorPortal(Entity):
             self.hud.actualizar_mision(self.mision_texto)
 
     def update(self):
+        import __main__ as main
+        if not getattr(main, 'carga_terminada', False):
+            self.hud.enabled = False
+            return
+
         from scripts.jugador import Jugador
 
-        jugador = next((e for e in scene.entities if isinstance(e, Jugador)), None)
+        jugador = Jugador.instancia
         if jugador:
             centro_arena_z = self.indice_arena * self.offset_z
             distancia_z = abs(jugador.z - centro_arena_z)
@@ -78,7 +83,7 @@ class GestorPortal(Entity):
 
     def teletransportar_jugador(self):
         from scripts.jugador import Jugador
-        jugador = next((e for e in scene.entities if isinstance(e, Jugador)), None)
+        jugador = Jugador.instancia
         if jugador:
             jugador.z += self.offset_z
             self.hud.actualizar_mision("TELETRANSPORTANDO...")

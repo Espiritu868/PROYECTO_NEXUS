@@ -1,4 +1,4 @@
-from ursina import Entity, camera, Vec3, held_keys, time, raycast, mouse, clamp, load_texture, Text, color, destroy
+from ursina import Entity, camera, Vec3, held_keys, time, raycast, mouse, clamp, load_texture, Text, color, destroy, invoke
 from direct.actor.Actor import Actor
 import math
 
@@ -32,8 +32,11 @@ class Bala(Entity):
             destroy(self)
 
 class Jugador(Entity):
+    instancia = None
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        Jugador.instancia = self
         self.scale = (1, 1, 1)
         self.origin_y = 0 
         
@@ -110,10 +113,11 @@ class Jugador(Entity):
 
         # --- 6. SISTEMA DE COMBATE (MELEE) ---
         self.vida = 100
+        self.vida_maxima = 100
         self.esta_muerto = False
         self.barra_vida_bg = Entity(parent=camera.ui, model='quad', color=color.rgba(0.1, 0.1, 0.1, 0.9), scale=(0.25, 0.015), position=(0, -0.45))
         self.barra_vida_fg = Entity(parent=self.barra_vida_bg, model='quad', color=color.rgba(0.0, 0.8, 0.0, 1.0), scale=(1, 1), position=(-0.5, 0), origin=(-0.5, 0))
-        self.texto_vida = Text(parent=camera.ui, text=f'{self.vida} / 100', position=(0, -0.42), origin=(0, 0), scale=0.9, color=color.white)
+        self.texto_vida = Text(parent=camera.ui, text=f'{self.vida} / {self.vida_maxima}', position=(0, -0.42), origin=(0, 0), scale=0.9, color=color.white)
         self.mira = Entity(parent=camera.ui, model='quad', scale=(0.01, 0.01), color=color.white, texture='circle')
         
         self.dano_ataque = 35
@@ -123,14 +127,50 @@ class Jugador(Entity):
         self.arma_entidad = None
         self.ultimo_disparo = 0
         
-        # --- NUEVO: SISTEMA DE MUNICIÓN ---
-        self.balas_cargador_max = 25
-        self.balas_cargador = 25
-        self.balas_reserva_max = 300
-        self.balas_reserva = 300
+        # --- NUEVO: SISTEMA DE MUNICIÓN E INVENTARIO ---
+        self.armas_inventario = [] # Lista de diccionarios con info de cada arma
+        self.indice_arma_actual = 0
         self.recargando = False
-        self.texto_municion = Text(parent=camera.ui, text=f'{self.balas_cargador} / {self.balas_reserva}', position=(0.6, -0.42), origin=(0, 0), scale=1.5, color=color.white)
-        self.texto_municion.enabled = False
+        
+        # --- HUD FUTURISTA DE MUNICIÓN (ARCO TACÓMETRO) ---
+        import math
+        from ursina import window
+        
+        self.hud_armas_bg = Entity(parent=camera.ui, position=(0.60, -0.28), enabled=False)
+        
+        # Anillos de fondo y cristal translúcido (camera.ui en Ursina ya mantiene la proporción 1:1)
+        Entity(parent=self.hud_armas_bg, model='circle', color=color.rgba(0, 0.15, 0.35, 0.5), scale=(0.35, 0.35), unlit=True)
+        self.anillo_interior = Entity(parent=self.hud_armas_bg, model='circle', color=color.rgba(0.0, 0.03, 0.08, 0.9), scale=(0.31, 0.31), unlit=True) 
+        
+        self.texto_nombre_arma = Text(parent=self.hud_armas_bg, text='ARMA', position=(0, 0.05), scale=1.3, color=color.cyan, origin=(0, 0))
+        self.texto_municion = Text(parent=self.hud_armas_bg, text='0 / 0', position=(0, -0.04), scale=2.5, color=color.white, origin=(0, 0))
+        
+        self.barritas_municion = []
+        self.num_barras_hud = 45
+        radio_barras = 0.16 # Movidas al borde
+        angulo_inicio = 220 # Empieza abajo a la izquierda
+        angulo_fin = -40    # Termina abajo a la derecha
+        
+        rango = angulo_inicio - angulo_fin
+        
+        for i in range(self.num_barras_hud):
+            ang_grados = angulo_inicio - (i * (rango / (self.num_barras_hud - 1)))
+            ang_rad = math.radians(ang_grados)
+            
+            x_pos = math.cos(ang_rad) * radio_barras
+            y_pos = math.sin(ang_rad) * radio_barras
+            
+            barrita = Entity(
+                parent=self.hud_armas_bg,
+                model='quad',
+                color=color.cyan,
+                scale=(0.02, 0.005),
+                position=(x_pos, y_pos),
+                # +90 hace que sean tangentes (acostadas sobre la curva)
+                rotation_z=ang_grados + 90,
+                unlit=True
+            )
+            self.barritas_municion.append(barrita)
         
         # --- 7. LINTERNA TÁCTICA (SPOTLIGHT) ---
         from ursina import SpotLight
@@ -157,6 +197,7 @@ class Jugador(Entity):
         self.radar_jugador = Entity(parent=self.radar_bg, model='arrow', color=color.cyan, scale=(0.06, 0.06), z=-0.03)
         self.puntos_radar = [Entity(parent=self.radar_bg, model='circle', color=color.red, scale=(0.05, 0.05), enabled=False, z=-0.02) for _ in range(40)]
         self.punto_radar_mesa = Entity(parent=self.radar_bg, model='circle', color=color.yellow, scale=(0.06, 0.06), enabled=False, z=-0.04)
+        self.punto_radar_caja = Entity(parent=self.radar_bg, model='quad', color=color.magenta, scale=(0.05, 0.05), enabled=False, z=-0.04)
         
         # --- NUEVO: SISTEMA DE MONEDAS ---
         self.monedas = 0
@@ -181,6 +222,12 @@ class Jugador(Entity):
         
         self.powerups_activos = {}
         self.tiempo_mensaje_powerup = 0
+        
+        # --- 13. SISTEMA DE PERKS (BEBIDAS) ---
+        self.max_armas = 2
+        self.vidas_extra = 0
+        self.perks_comprados = []
+        self.ui_perks_iconos = []
 
     def input(self, key):
         if self.esta_muerto: return
@@ -192,15 +239,19 @@ class Jugador(Entity):
         elif key == '-':
             self.modelo_visual.scale *= 0.75
             print(f"NUEVA ESCALA: {self.modelo_visual.scale}")
-        # CHEAT CODE: ASNAEB
+        # CHEAT CODES
         if len(key) == 1 and key.isalpha():
             self.teclas_escritas += key.lower()
-            if len(self.teclas_escritas) > 6:
-                self.teclas_escritas = self.teclas_escritas[-6:]
-            if self.teclas_escritas == "asnaeb":
+            if len(self.teclas_escritas) > 10:
+                self.teclas_escritas = self.teclas_escritas[-10:]
+            if self.teclas_escritas.endswith("asnaeb"):
                 self.invulnerable = not self.invulnerable
                 self.teclas_escritas = "" # Reset
                 print(f"Modo Invulnerable: {'ON' if self.invulnerable else 'OFF'}")
+            elif self.teclas_escritas.endswith("hesoyam"):
+                self.ganar_monedas(100000)
+                self.teclas_escritas = "" # Reset
+                print("Cheat HESOYAM activado: +100,000 Monedas")
         
         # --- ZOOM CON RUEDA DEL RATÓN ---
         if key == 'scroll up':
@@ -218,8 +269,17 @@ class Jugador(Entity):
                 self.iniciar_ataque()
                 
         if key == 'r' and self.tiene_arma and not self.recargando:
-            if self.balas_cargador < self.balas_cargador_max and self.balas_reserva > 0:
-                self.recargar()
+            self.recargar()
+            
+        if key == 'q' and self.tiene_arma and not self.recargando:
+            siguiente_idx = (self.indice_arma_actual + 1) % len(self.armas_inventario)
+            self.cambiar_arma(siguiente_idx)
+            
+        if key == '1' and self.tiene_arma and not self.recargando:
+            self.cambiar_arma(0)
+            
+        if key == '2' and self.tiene_arma and not self.recargando:
+            self.cambiar_arma(1)
                     
         if key == 'c' and self.dash_disponible and not self.haciendo_dash and not self.atacando:
             self.iniciar_dash()
@@ -277,7 +337,6 @@ class Jugador(Entity):
                 entidad.recibir_dano(self.dano_ataque)
                 
         # El uppercut dura más o menos 1 segundo. Bloqueamos otras acciones por ese tiempo.
-        from ursina import invoke
         invoke(self.terminar_ataque, delay=0.8)
 
     def terminar_ataque(self):
@@ -285,28 +344,67 @@ class Jugador(Entity):
         self.atacando = False
         self.cambiar_animacion('idle')
 
-    def equipar_arma(self, modelo_existente=None):
-        if self.tiene_arma:
-            return
-        self.tiene_arma = True
-        self.texto_municion.enabled = True
-        # El arma flota al lado derecho del jugador
-        if modelo_existente:
-            self.arma_entidad = modelo_existente
-            self.arma_entidad.parent = self
-            self.arma_entidad.collider = None
-            self.arma_entidad.position = (0.8, 1.2, 0.5)
-            self.arma_entidad.scale = 0.1
-            self.arma_entidad.rotation = (0, 0, 0)
-            if hasattr(self.arma_entidad, 'animations'):
-                for seq in self.arma_entidad.animations:
-                    seq.pause()
-                    seq.kill()
-            self.arma_entidad.animations = []
-        else:
-            self.arma_entidad = Entity(parent=self, model='assets/modelos/objetos_con_meshy/arma.glb', position=(0.8, 1.2, 0.5), scale=0.1)
+    def equipar_arma(self, modelo_existente=None, id_arma='M4A1'):
+        if not modelo_existente:
+            modelo_existente = Entity(model='assets/modelos/objetos_con_meshy/arma.glb')
+            
+        modelo_existente.parent = self
+        modelo_existente.collider = None
+        modelo_existente.position = (0.8, 1.2, 0.5)
+        modelo_existente.scale = 0.1
+        modelo_existente.rotation = (0, 0, 0)
+        if hasattr(modelo_existente, 'animations'):
+            for seq in modelo_existente.animations:
+                seq.pause()
+                seq.kill()
+        modelo_existente.animations = []
         
+        # Capacidades por defecto (se pueden pasar por parámetro después)
+        max_cargador = 25
+        max_reserva = 300
+        
+        nueva_arma_data = {
+            'entidad': modelo_existente,
+            'id_arma': id_arma.upper(),
+            'balas_cargador': max_cargador,
+            'balas_reserva': max_reserva,
+            'max_cargador': max_cargador,
+            'max_reserva': max_reserva
+        }
+        
+        if len(self.armas_inventario) < self.max_armas:
+            self.armas_inventario.append(nueva_arma_data)
+            self.cambiar_arma(len(self.armas_inventario) - 1)
+        else:
+            arma_antigua = self.armas_inventario[self.indice_arma_actual]
+            destroy(arma_antigua['entidad'])
+            self.armas_inventario[self.indice_arma_actual] = nueva_arma_data
+            self.cambiar_arma(self.indice_arma_actual)
+            
+        self.tiene_arma = True
+        self.hud_armas_bg.enabled = True
+        self.texto_nombre_arma.enabled = True
+        self.texto_municion.enabled = True
+
+    def cambiar_arma(self, nuevo_indice):
+        if self.recargando or not self.armas_inventario or nuevo_indice >= len(self.armas_inventario):
+            return
+            
+        if self.arma_entidad:
+            self.arma_entidad.enabled = False
+            
+        self.indice_arma_actual = nuevo_indice
+        arma_data = self.armas_inventario[self.indice_arma_actual]
+        self.arma_entidad = arma_data['entidad']
+        self.arma_entidad.enabled = True
+        
+        self.actualizar_hud_municion()
+
     def recargar(self):
+        arma_data = self.armas_inventario[self.indice_arma_actual]
+        if arma_data['balas_cargador'] >= arma_data['max_cargador'] or arma_data['balas_reserva'] <= 0:
+            return
+            
         self.recargando = True
         self.texto_municion.text = "Recargando..."
         self.texto_municion.color = color.yellow
@@ -315,37 +413,70 @@ class Jugador(Entity):
         if 'recarga_rapida' in self.powerups_activos:
             tiempo_recarga = 0.75
             
-        from ursina import invoke
-        invoke(self._finalizar_recarga, delay=tiempo_recarga)
+        if not hasattr(self, '_recarga_id'):
+            self._recarga_id = 0
+        self._recarga_id += 1
+        current_id = self._recarga_id
+        
+        invoke(lambda: self._finalizar_recarga() if self._recarga_id == current_id else None, delay=tiempo_recarga)
 
     def _finalizar_recarga(self):
         if self.esta_muerto: return
         self.recargando = False
         
-        balas_faltantes = self.balas_cargador_max - self.balas_cargador
-        if self.balas_reserva >= balas_faltantes:
-            self.balas_reserva -= balas_faltantes
-            self.balas_cargador = self.balas_cargador_max
+        arma_data = self.armas_inventario[self.indice_arma_actual]
+        balas_faltantes = arma_data['max_cargador'] - arma_data['balas_cargador']
+        
+        if arma_data['balas_reserva'] >= balas_faltantes:
+            arma_data['balas_reserva'] -= balas_faltantes
+            arma_data['balas_cargador'] = arma_data['max_cargador']
         else:
-            self.balas_cargador += self.balas_reserva
-            self.balas_reserva = 0
+            arma_data['balas_cargador'] += arma_data['balas_reserva']
+            arma_data['balas_reserva'] = 0
             
         self.texto_municion.color = color.white
         self.actualizar_hud_municion()
 
     def actualizar_hud_municion(self):
-        if not self.recargando:
-            self.texto_municion.text = f'{self.balas_cargador} / {self.balas_reserva}'
-            if self.balas_cargador <= 5:
+        if not self.recargando and self.armas_inventario:
+            arma_data = self.armas_inventario[self.indice_arma_actual]
+            self.texto_municion.text = f"{arma_data['balas_cargador']} / {arma_data['balas_reserva']}"
+            self.texto_nombre_arma.text = arma_data.get('id_arma', 'ARMA')
+            
+            cargador_actual = arma_data['balas_cargador']
+            max_cargador = arma_data['max_cargador']
+            
+            total_barras = self.num_barras_hud
+            
+            # Determinar color basado en si le quedan pocas balas (< 20%)
+            color_barras = color.cyan
+            if cargador_actual <= int(max_cargador * 0.2):
+                color_barras = color.red
                 self.texto_municion.color = color.red
+                self.texto_nombre_arma.color = color.red
+                self.anillo_interior.color = color.rgba(0.3, 0.0, 0.0, 0.9)
             else:
                 self.texto_municion.color = color.white
+                self.texto_nombre_arma.color = color.cyan
+                self.anillo_interior.color = color.rgba(0.0, 0.03, 0.08, 0.9)
+                
+            # Calcular cuántas barras deben estar iluminadas
+            porcentaje_lleno = cargador_actual / max_cargador if max_cargador > 0 else 0
+            barras_llenas = int(porcentaje_lleno * total_barras)
+            
+            for i in range(total_barras):
+                self.barritas_municion[i].enabled = True
+                if i < barras_llenas:
+                    self.barritas_municion[i].color = color_barras
+                else:
+                    self.barritas_municion[i].color = color.rgba(0.2, 0.2, 0.2, 0.5)
 
     def disparar(self):
-        if self.recargando: return
+        if self.recargando or not self.armas_inventario: return
         
-        if self.balas_cargador <= 0:
-            if self.balas_reserva > 0:
+        arma_data = self.armas_inventario[self.indice_arma_actual]
+        if arma_data['balas_cargador'] <= 0:
+            if arma_data['balas_reserva'] > 0:
                 self.recargar()
             else:
                 self.texto_municion.text = "¡SIN MUNICIÓN!"
@@ -360,7 +491,7 @@ class Jugador(Entity):
             return
         self.ultimo_disparo = time.time()
         
-        self.balas_cargador -= 1
+        arma_data['balas_cargador'] -= 1
         self.actualizar_hud_municion()
         self.ultimo_disparo = time.time()
         
@@ -394,7 +525,6 @@ class Jugador(Entity):
         self.pivot_camara.animate_rotation_z(15 if held_keys['a'] else -15, duration=0.1)
         self.pivot_camara.animate_rotation_z(0, duration=0.2, delay=0.1)
         
-        from ursina import invoke
         invoke(self.terminar_dash, delay=0.3) 
         invoke(self.recuperar_dash, delay=self.dash_cooldown)
 
@@ -418,13 +548,26 @@ class Jugador(Entity):
         if self.actor and not self.atacando and not self.haciendo_dash:
             self.actor.play('hit')
             self.estado_animacion = 'hit'
-            from ursina import invoke
             invoke(lambda: self.cambiar_animacion('idle') if not self.esta_muerto and not self.atacando else None, delay=0.5)
 
         if self.vida <= 0:
             self.morir()
 
     def morir(self):
+        if self.vidas_extra > 0:
+            # Mecánica Quick Revive
+            self.vidas_extra -= 1
+            self.vida = self.vida_maxima
+            print("¡Te has salvado por la bebida azul!")
+            self.invulnerable = True
+            invoke(lambda: setattr(self, 'invulnerable', False), delay=3.0)
+            
+            # Quitar la bebida azul de la UI si se gastó
+            if 'azul' in self.perks_comprados:
+                self.perks_comprados.remove('azul')
+                self.actualizar_ui_perks()
+            return
+            
         self.esta_muerto = True
         self.vida = 0
         if self.actor:
@@ -433,6 +576,18 @@ class Jugador(Entity):
         
         # Efecto visual de muerte (cae la cámara o se pinta la pantalla)
         self.barra_vida_fg.color = color.black
+        
+        # Activar pantalla de muerte
+        print("¡HAS MUERTO!")
+        from ursina import scene, application
+        encontrado = False
+        for e in scene.entities:
+            if type(e).__name__ == 'PantallaMuerte':
+                e.mostrar()
+                encontrado = True
+                break
+        if not encontrado:
+            application.quit()
 
     def cambiar_animacion(self, nombre_animacion):
         if not self.actor or self.atacando or self.haciendo_dash or self.esta_muerto:
@@ -507,8 +662,8 @@ class Jugador(Entity):
 
     def update(self):
         # --- ACTUALIZAR BARRA DE VIDA ---
-        self.texto_vida.text = f'{max(0, self.vida)} / 100'
-        self.barra_vida_fg.scale_x = max(self.vida / 100.0, 0.0)
+        self.texto_vida.text = f'{max(0, int(self.vida))} / {self.vida_maxima}'
+        self.barra_vida_fg.scale_x = max(self.vida / float(self.vida_maxima), 0.0)
         
         # --- ACTUALIZAR POWERUPS ---
         if self.tiempo_mensaje_powerup > 0:
@@ -544,7 +699,8 @@ class Jugador(Entity):
                 vivos = sum(1 for e in gestor.enemigos if e.enabled and hasattr(e, 'vida') and e.vida > 0)
                 faltantes = vivos + getattr(gestor, 'spawns_pendientes', 0)
                 self.texto_enemigos.text = f'ENEMIGOS: {faltantes}'
-                
+
+
         if self.esta_muerto:
             return
             
@@ -657,8 +813,10 @@ class Jugador(Entity):
         # --- ACTUALIZAR RADAR TÁCTICO BIOLÓGICO ---
         import __main__ as main
         indice_punto = 0
-        if hasattr(main, 'gestores_arena'):
-            for gestor in main.gestores_arena:
+        if hasattr(main, 'gestores_arena') and hasattr(main, 'coordinador') and main.coordinador:
+            indice_actual = int(round(self.z / main.coordinador.offset_z))
+            if 0 <= indice_actual < len(main.gestores_arena):
+                gestor = main.gestores_arena[indice_actual]
                 for enemigo in gestor.enemigos:
                     if enemigo.enabled and hasattr(enemigo, 'vida') and enemigo.vida > 0:
                         dir_vector = enemigo.position - self.position
@@ -694,5 +852,66 @@ class Jugador(Entity):
         else:
             self.punto_radar_mesa.enabled = False
 
+        # --- RADAR DE CAJA MISTERIOSA ---
+        if hasattr(main, 'caja_misteriosa') and main.caja_misteriosa and not getattr(main.caja_misteriosa, 'destroyed', False):
+            dir_vector = main.caja_misteriosa.world_position - self.position
+            dir_xz = Vec3(dir_vector.x, 0, dir_vector.z)
+            distancia = dir_xz.length()
+            if distancia < 250:
+                local_z = dir_xz.dot(self.forward) 
+                local_x = dir_xz.dot(self.right)   
+                self.punto_radar_caja.enabled = True
+                self.punto_radar_caja.x = clamp(local_x * 0.0018, -0.45, 0.45)
+                self.punto_radar_caja.y = clamp(local_z * 0.0018, -0.45, 0.45)
+            else:
+                self.punto_radar_caja.enabled = False
+        else:
+            self.punto_radar_caja.enabled = False
+
         # --- MOTOR DE NIEVE CONTINUA ---
         # (SISTEMA DE NIEVE ELIMINADO)
+
+    def comprar_bebida(self, tipo):
+        if tipo in self.perks_comprados:
+            return # Ya la tiene
+            
+        self.perks_comprados.append(tipo)
+        
+        if tipo == 'azul':
+            self.vidas_extra += 1
+        elif tipo == 'roja':
+            self.vida_maxima = 200
+            self.vida = 200
+            self.barra_vida_bg.scale = (0.50, 0.015) # Hacemos la barra visualmente el doble de larga
+        elif tipo == 'verde':
+            self.max_armas = 3
+            
+        self.actualizar_ui_perks()
+        print(f"Bebida {tipo} adquirida.")
+
+    def actualizar_ui_perks(self):
+        # Limpiar iconos anteriores
+        for icono in self.ui_perks_iconos:
+            destroy(icono)
+        self.ui_perks_iconos.clear()
+        
+        # Dibujar iconos centrados en la parte inferior de la pantalla
+        total_perks = len(self.perks_comprados)
+        espaciado = 0.05
+        ancho_total = (total_perks - 1) * espaciado
+        x_base = -(ancho_total / 2)
+        
+        for i, perk in enumerate(self.perks_comprados):
+            color_icono = color.white
+            if perk == 'azul': color_icono = color.cyan
+            elif perk == 'roja': color_icono = color.red
+            elif perk == 'verde': color_icono = color.green
+            
+            icono = Entity(
+                parent=camera.ui,
+                model='circle',
+                color=color_icono,
+                scale=(0.04, 0.04),
+                position=(x_base + (i * espaciado), -0.38) # Arriba de la barra de vida
+            )
+            self.ui_perks_iconos.append(icono)

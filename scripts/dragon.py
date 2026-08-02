@@ -115,11 +115,7 @@ class DragonBoss(Entity):
 
     def buscar_jugador(self):
         from scripts.jugador import Jugador
-        from ursina import scene
-        for e in scene.entities:
-            if isinstance(e, Jugador):
-                return e
-        return None
+        return Jugador.instancia
 
     def recibir_dano(self, cantidad):
         if self.estado_animacion == 'dead' or self.estado_animacion == 'arise': return
