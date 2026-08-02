@@ -31,6 +31,33 @@ class Bala(Entity):
                 entidad.recibir_dano(self.dano)
             destroy(self)
 
+class CampoFuerzaProtector(Entity):
+    def __init__(self, jugador_obj, color_campo, **kwargs):
+        super().__init__(
+            parent=jugador_obj,
+            model='sphere',
+            color=color_campo,
+            scale=5, # 5 metros de diámetro (radio de 2.5m)
+            alpha=0.3,
+            double_sided=True,
+            collider=None, # IMPORTANTE: Sin colisionador para no atrapar al jugador
+            **kwargs
+        )
+        self.jugador = jugador_obj
+        
+    def update(self):
+        import __main__ as main
+        if hasattr(main, 'gestores_arena'):
+            for gestor in main.gestores_arena:
+                for enemigo in gestor.enemigos:
+                    if enemigo.enabled and hasattr(enemigo, 'vida') and enemigo.vida > 0:
+                        dir_vector = enemigo.world_position - self.jugador.world_position
+                        dist = dir_vector.length()
+                        if dist < 2.5: # Si entra al radio de 2.5 metros
+                            dir_vector.y = 0 # Solo empuje horizontal
+                            push_dir = dir_vector.normalized()
+                            enemigo.position += push_dir * 15 * time.dt # Fuerte empuje hacia atrás
+
 class Jugador(Entity):
     instancia = None
 
@@ -59,7 +86,8 @@ class Jugador(Entity):
                     'uppercut': ruta_base + 'sas_idle.glb', # Fallback temporal
                     'kick': ruta_base + 'sas_idle.glb', # Fallback temporal
                     'hit': ruta_base + 'sas_hit.glb',
-                    'dead': ruta_base + 'sas_dead.glb'
+                    'dead': ruta_base + 'sas_dead.glb',
+                    'drinking': ruta_base + 'sas_drinking.glb'
                 }
             )
             self.actor.reparentTo(self.modelo_visual)
@@ -71,7 +99,7 @@ class Jugador(Entity):
             # Para evitar que el juego dé un tirón la primera vez que se ejecuta un ataque o dash,
             # obligamos a Panda3D a procesar (bind) las animaciones silenciosamente al iniciar.
             try:
-                for anim in ['walk', 'walk_back', 'run', 'dash', 'slash', 'uppercut', 'kick', 'hit', 'dead']:
+                for anim in ['walk', 'walk_back', 'run', 'dash', 'slash', 'uppercut', 'kick', 'hit', 'dead', 'drinking']:
                     self.actor.getAnimControl(anim)
             except:
                 pass
@@ -765,17 +793,24 @@ class Jugador(Entity):
             else:
                 self.cambiar_animacion('walk')
                 
-        # Detener movimiento si estamos atacando fuerte
+        # Detener movimiento si estamos atacando fuerte, pero permitir caminar lento al beber
         if self.atacando:
-            direccion = Vec3(0,0,0)
+            if self.estado_animacion == 'drinking':
+                velocidad = self.velocidad_caminar * 0.5
+            else:
+                direccion = Vec3(0,0,0)
             
         desplazamiento = direccion * velocidad * dt
         
         # --- FISICAS DE COLISIÓN HORIZONTAL ---
+        entidades_ignoradas = (self, self.modelo_visual)
+        if hasattr(self, 'campo_fuerza') and self.campo_fuerza:
+            entidades_ignoradas += (self.campo_fuerza,)
+            
         if desplazamiento.x != 0:
             dir_x = 1 if desplazamiento.x > 0 else -1
             dist_x = abs(desplazamiento.x) + 0.35
-            hit_x = raycast(self.position + Vec3(0, 1.0, 0), direction=(dir_x, 0, 0), distance=dist_x, ignore=(self,))
+            hit_x = raycast(self.position + Vec3(0, 1.0, 0), direction=(dir_x, 0, 0), distance=dist_x, ignore=entidades_ignoradas)
             if not hit_x.hit or hit_x.distance <= 0.05:
                 self.x += desplazamiento.x
             elif hasattr(hit_x.entity, 'jugador_objetivo'):
@@ -786,7 +821,7 @@ class Jugador(Entity):
         if desplazamiento.z != 0:
             dir_z = 1 if desplazamiento.z > 0 else -1
             dist_z = abs(desplazamiento.z) + 0.35
-            hit_z = raycast(self.position + Vec3(0, 1.0, 0), direction=(0, 0, dir_z), distance=dist_z, ignore=(self,))
+            hit_z = raycast(self.position + Vec3(0, 1.0, 0), direction=(0, 0, dir_z), distance=dist_z, ignore=entidades_ignoradas)
             if not hit_z.hit or hit_z.distance <= 0.05:
                 self.z += desplazamiento.z
             elif hasattr(hit_z.entity, 'jugador_objetivo'):
@@ -888,6 +923,34 @@ class Jugador(Entity):
             
         self.actualizar_ui_perks()
         print(f"Bebida {tipo} adquirida.")
+        
+        # Animación de beber y Campo de Fuerza
+        if self.actor:
+            if hasattr(self, 'arma_entidad') and self.arma_entidad:
+                self.arma_entidad.enabled = False
+            self.actor.play('drinking')
+            self.estado_animacion = 'drinking'
+            self.atacando = True # bloquea el movimiento
+            
+            # Generar campo de fuerza
+            color_campo = color.white
+            if tipo == 'azul': color_campo = color.cyan
+            elif tipo == 'roja': color_campo = color.red
+            elif tipo == 'verde': color_campo = color.green
+            
+            self.campo_fuerza = CampoFuerzaProtector(self, color.rgba(*color_campo.rgba[:3], 100))
+            
+            invoke(lambda: self.finalizar_bebida(), delay=3.5)
+
+    def finalizar_bebida(self):
+        self.atacando = False
+        if hasattr(self, 'campo_fuerza'):
+            destroy(self.campo_fuerza)
+            
+        if not self.esta_muerto:
+            self.cambiar_animacion('idle')
+            if hasattr(self, 'arma_entidad') and self.arma_entidad:
+                self.arma_entidad.enabled = True
 
     def actualizar_ui_perks(self):
         # Limpiar iconos anteriores
