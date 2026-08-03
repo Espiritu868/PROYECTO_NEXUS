@@ -108,8 +108,15 @@ class CajaMisteriosa(Entity):
         self.arma_visual.model = self.arma_mostrada['modelo']
         self.estado = 'abierta'
         
+        # Generar un ID único de apertura para evitar cierres cruzados de usos anteriores
+        self.id_apertura = getattr(self, 'id_apertura', 0) + 1
+        
         # El arma se queda 12 segundos, si no la tomas, se guarda
-        invoke(self.cerrar_caja, delay=12.0)
+        invoke(self.cerrar_caja_auto, self.id_apertura, delay=12.0)
+
+    def cerrar_caja_auto(self, id_apertura):
+        if getattr(self, 'id_apertura', -1) == id_apertura:
+            self.cerrar_caja()
 
     def entregar_arma(self, jugador):
         if not self.arma_mostrada: return

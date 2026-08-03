@@ -3,10 +3,10 @@ from direct.actor.Actor import Actor
 import math
 
 class Bala(Entity):
-    def __init__(self, posicion_inicial, direccion, dano, jugador_obj, **kwargs):
+    def __init__(self, posicion_inicial, direccion, dano, jugador_obj, color_bala=color.yellow, **kwargs):
         super().__init__(
             model='sphere',
-            color=color.yellow,
+            color=color_bala,
             scale=0.1,
             position=posicion_inicial,
             **kwargs
@@ -17,6 +17,7 @@ class Bala(Entity):
         self.vida_util = 2.0
         self.creacion = time.time()
         self.jugador_obj = jugador_obj
+        self.color_bala = color_bala
         
     def update(self):
         self.position += self.direccion * self.velocidad * time.dt
@@ -29,6 +30,12 @@ class Bala(Entity):
             entidad = hit_info.entity
             if hasattr(entidad, 'recibir_dano'):
                 entidad.recibir_dano(self.dano)
+            
+            # Efecto visual de impacto
+            particula = Entity(model='cube', color=self.color_bala, scale=0.15, position=hit_info.world_point, unlit=True)
+            particula.animate_scale(0, duration=0.3)
+            destroy(particula, delay=0.3)
+            
             destroy(self)
 
 class CampoFuerzaProtector(Entity):
@@ -37,26 +44,31 @@ class CampoFuerzaProtector(Entity):
             parent=jugador_obj,
             model='sphere',
             color=color_campo,
-            scale=5, # 5 metros de diámetro (radio de 2.5m)
+            scale=0, # Inicia en 0 para expandirse de a poco
             alpha=0.3,
             double_sided=True,
             collider=None, # IMPORTANTE: Sin colisionador para no atrapar al jugador
             **kwargs
         )
         self.jugador = jugador_obj
+        self.animate_scale(40, duration=1.5) # Expansión épica hasta 40m de diámetro
         
     def update(self):
         import __main__ as main
+        radio_actual = self.scale_x / 2.0 # El radio va creciendo junto con la escala
         if hasattr(main, 'gestores_arena'):
             for gestor in main.gestores_arena:
                 for enemigo in gestor.enemigos:
                     if enemigo.enabled and hasattr(enemigo, 'vida') and enemigo.vida > 0:
                         dir_vector = enemigo.world_position - self.jugador.world_position
                         dist = dir_vector.length()
-                        if dist < 2.5: # Si entra al radio de 2.5 metros
+                        if dist < radio_actual:
                             dir_vector.y = 0 # Solo empuje horizontal
-                            push_dir = dir_vector.normalized()
-                            enemigo.position += push_dir * 15 * time.dt # Fuerte empuje hacia atrás
+                            if dir_vector.length() > 0:
+                                push_dir = dir_vector.normalized()
+                            else:
+                                push_dir = self.jugador.forward
+                            enemigo.position += push_dir * 25 * time.dt # Fuerte empuje hacia atrás
 
 class Jugador(Entity):
     instancia = None
@@ -155,35 +167,43 @@ class Jugador(Entity):
         self.vida_maxima = 100
         self.esta_muerto = False
         
-        # Diccionario maestro de offsets por arma
-        self.offsets_por_arma = {
-            'M4A1': {
+        # Diccionario maestro de estadísticas y offsets por arma
+        self.stats_por_arma = {
+            'M1911': {
                 'pos_idle': Vec3(-0.032, 0.051, 0.437),
                 'pos_move': Vec3(-0.077, 0.033, 0.364),
                 'rot': Vec3(2.785, 82.343, 0.000),
                 'escala': 0.167,
-                'bala': Vec3(0.186, 1.815, 0.624)
+                'bala': Vec3(0.186, 1.815, 0.624),
+                'dano': 25, 'cadencia': 0.3, 'tiempo_recarga': 1.0, 
+                'cargador': 8, 'reserva': 200, 'color': color.yellow, 'rafaga': 1
             },
             'SCAR': {
                 'pos_idle': Vec3(0.000, 0.000, 0.233),
                 'pos_move': Vec3(0.000, 0.000, 0.233),
                 'rot': Vec3(0.000, 79.770, 0.000),
                 'escala': 0.559,
-                'bala': Vec3(0.136, 1.774, 0.797)
+                'bala': Vec3(0.136, 1.774, 0.797),
+                'dano': 45, 'cadencia': 0.1, 'tiempo_recarga': 2.5, 
+                'cargador': 30, 'reserva': 300, 'color': color.orange, 'rafaga': 1, 'automatico': True
             },
             'RAYGUN': {
                 'pos_idle': Vec3(0.012, 0.067, 0.363),
                 'pos_move': Vec3(0.012, 0.067, 0.363),
                 'rot': Vec3(0.000, 90.110, 0.000),
                 'escala': 0.256,
-                'bala': Vec3(0.194, 1.851, 0.789)
+                'bala': Vec3(0.194, 1.851, 0.789),
+                'dano': 120, 'cadencia': 0.25, 'tiempo_recarga': 2.0, 
+                'cargador': 20, 'reserva': 160, 'color': color.green, 'rafaga': 1
             },
             'RAYGUN_MK2': {
                 'pos_idle': Vec3(0.000, 0.072, 0.397),
                 'pos_move': Vec3(0.000, 0.072, 0.397),
                 'rot': Vec3(0.000, 81.010, 0.000),
                 'escala': 0.302,
-                'bala': Vec3(0.183, 1.838, 0.675)
+                'bala': Vec3(0.183, 1.838, 0.675),
+                'dano': 90, 'cadencia': 0.35, 'tiempo_recarga': 2.0, 
+                'cargador': 21, 'reserva': 168, 'color': color.green, 'rafaga': 2
             }
         }
         
@@ -196,6 +216,7 @@ class Jugador(Entity):
         self.bala_offset = Vec3(0,0,0)
         
         self.modo_debug_editando = 'ARMA' # 'ARMA' o 'BALA'
+        self.offsets_por_arma = {}
         self.camara_frontal = False
         
         self.texto_debug_arma = Text(parent=camera.ui, text="", position=(-0.85, 0.45), scale=1, color=color.yellow, background=True)
@@ -427,7 +448,7 @@ class Jugador(Entity):
         self.atacando = False
         self.cambiar_animacion('idle')
 
-    def equipar_arma(self, modelo_existente=None, id_arma='M4A1'):
+    def equipar_arma(self, modelo_existente=None, id_arma='M1911'):
         if not modelo_existente:
             modelo_existente = Entity(model='assets/modelos/objetos_con_meshy/arma.glb')
             
@@ -448,17 +469,22 @@ class Jugador(Entity):
                 seq.kill()
         modelo_existente.animations = []
         
-        # Capacidades por defecto (se pueden pasar por parámetro después)
-        max_cargador = 25
-        max_reserva = 300
+        id_arma = id_arma.upper()
+        stats = self.stats_por_arma.get(id_arma, self.stats_por_arma['M1911'])
         
         nueva_arma_data = {
             'entidad': modelo_existente,
-            'id_arma': id_arma.upper(),
-            'balas_cargador': max_cargador,
-            'balas_reserva': max_reserva,
-            'max_cargador': max_cargador,
-            'max_reserva': max_reserva
+            'id_arma': id_arma,
+            'balas_cargador': stats['cargador'],
+            'balas_reserva': stats['reserva'],
+            'max_cargador': stats['cargador'],
+            'max_reserva': stats['reserva'],
+            'dano': stats['dano'],
+            'cadencia': stats['cadencia'],
+            'tiempo_recarga': stats['tiempo_recarga'],
+            'color': stats['color'],
+            'rafaga': stats['rafaga'],
+            'automatico': stats.get('automatico', False)
         }
         
         if len(self.armas_inventario) < self.max_armas:
@@ -495,19 +521,16 @@ class Jugador(Entity):
             return
             
         arma_data = self.armas_inventario[self.indice_arma_actual]
-        id_arma = arma_data.get('id_arma', 'DEFAULT')
+        id_arma = arma_data.get('id_arma', 'M1911')
         
-        if id_arma not in self.offsets_por_arma:
-            # Creamos un perfil en blanco para esta arma si no existe
-            self.offsets_por_arma[id_arma] = {
-                'pos_idle': Vec3(0,0,0),
-                'pos_move': Vec3(0,0,0),
-                'rot': Vec3(0,0,0),
-                'escala': 0.1,
-                'bala': Vec3(0,0,0)
-            }
+        if id_arma not in self.stats_por_arma:
+            # Creamos un perfil en blanco usando la M1911 de base si no existe
+            self.stats_por_arma[id_arma] = self.stats_por_arma['M1911'].copy()
+            self.stats_por_arma[id_arma]['pos_idle'] = Vec3(0,0,0)
+            self.stats_por_arma[id_arma]['pos_move'] = Vec3(0,0,0)
+            self.stats_por_arma[id_arma]['bala'] = Vec3(0,0,0)
             
-        data = self.offsets_por_arma[id_arma]
+        data = self.stats_por_arma[id_arma]
         self.arma_offset_pos_idle = Vec3(*data['pos_idle'])
         self.arma_offset_pos_move = Vec3(*data['pos_move'])
         self.arma_offset_pos_actual = Vec3(*data['pos_idle'])
@@ -524,9 +547,9 @@ class Jugador(Entity):
         self.texto_municion.text = "Recargando..."
         self.texto_municion.color = color.yellow
         
-        tiempo_recarga = 1.5
+        tiempo_recarga = arma_data.get('tiempo_recarga', 1.5)
         if 'recarga_rapida' in self.powerups_activos:
-            tiempo_recarga = 0.75
+            tiempo_recarga = tiempo_recarga / 2.0
             
         if not hasattr(self, '_recarga_id'):
             self._recarga_id = 0
@@ -587,7 +610,7 @@ class Jugador(Entity):
                     self.barritas_municion[i].color = color.rgba(0.2, 0.2, 0.2, 0.5)
 
     def disparar(self):
-        if self.recargando or not self.armas_inventario: return
+        if self.recargando or getattr(self, 'disparando_rafaga', False) or not self.armas_inventario: return
         
         arma_data = self.armas_inventario[self.indice_arma_actual]
         if arma_data['balas_cargador'] <= 0:
@@ -598,29 +621,49 @@ class Jugador(Entity):
                 self.texto_municion.color = color.red
             return
             
-        cadencia = 0.2
+        cadencia = arma_data.get('cadencia', 0.2)
         if 'doble_cadencia' in self.powerups_activos:
-            cadencia = 0.1
+            cadencia = cadencia / 2.0
             
-        if time.time() - self.ultimo_disparo < cadencia:
+        if time.time() - getattr(self, 'ultimo_disparo', 0) < cadencia:
             return
+            
         self.ultimo_disparo = time.time()
         
+        rafaga = arma_data.get('rafaga', 1)
+        if rafaga > 1:
+            self.disparando_rafaga = True
+            self._ejecutar_disparo(rafaga)
+        else:
+            self._ejecutar_disparo(1)
+
+    def _ejecutar_disparo(self, rafagas_restantes):
+        if self.esta_muerto or not self.armas_inventario:
+            self.disparando_rafaga = False
+            return
+            
+        arma_data = self.armas_inventario[self.indice_arma_actual]
+        
+        if arma_data['balas_cargador'] <= 0:
+            self.disparando_rafaga = False
+            return
+            
         arma_data['balas_cargador'] -= 1
         self.actualizar_hud_municion()
-        self.ultimo_disparo = time.time()
+        
+        # --- RECARGA AUTOMÁTICA AL VACIAR CARGADOR ---
+        if arma_data['balas_cargador'] <= 0 and arma_data.get('balas_reserva', 0) > 0:
+            self.recargar()
         
         # 1. Origen físico del disparo (el cañón del arma)
         origen_disparo = self.world_position + self.up * self.bala_offset.y + self.right * self.bala_offset.x + self.forward * self.bala_offset.z
         
         # 2. ¿A qué está apuntando el punto blanco (mira) realmente?
-        # Lanzamos un rayo desde el centro de la pantalla hacia adelante
         hit_mira = raycast(camera.world_position, camera.forward, distance=1000, ignore=(self, self.modelo_visual, self.pivot_camara))
         
         if hit_mira.hit:
             punto_objetivo = hit_mira.world_point
         else:
-            # Si miras al cielo vacío, el objetivo es un punto muy lejano
             punto_objetivo = camera.world_position + camera.forward * 1000
             
         # 3. La bala viaja en diagonal desde el arma hacia el objetivo visual
@@ -628,13 +671,24 @@ class Jugador(Entity):
         
         # Retroceso visual básico
         if self.arma_entidad:
-            self.arma_entidad.animate_position((0.8, 1.2, 0.3), duration=0.05)
-            self.arma_entidad.animate_position((0.8, 1.2, 0.5), duration=0.1, delay=0.05)
+            import random
+            offset_y = random.uniform(1.1, 1.25)
+            self.arma_entidad.animate_position((0.8, offset_y, 0.3), duration=0.03)
+            self.arma_entidad.animate_position((0.8, 1.2, 0.5), duration=0.07, delay=0.03)
         
-        Bala(posicion_inicial=origen_disparo, direccion=direccion_disparo, dano=35, jugador_obj=self)
+        dano = arma_data.get('dano', 35)
+        color_bala = arma_data.get('color', color.yellow)
+        Bala(posicion_inicial=origen_disparo, direccion=direccion_disparo, dano=dano, jugador_obj=self, color_bala=color_bala)
+        
         if 'doble_cadencia' in self.powerups_activos:
-            # Disparamos una segunda bala en la misma instancia para que sea literalmente "doble disparo"
-            Bala(posicion_inicial=origen_disparo + self.right * 0.1, direccion=direccion_disparo, dano=35, jugador_obj=self)
+            # Disparamos una segunda bala paralela para el powerup
+            Bala(posicion_inicial=origen_disparo + self.right * 0.1, direccion=direccion_disparo, dano=dano, jugador_obj=self, color_bala=color_bala)
+            
+        rafagas_restantes -= 1
+        if rafagas_restantes > 0:
+            invoke(lambda: self._ejecutar_disparo(rafagas_restantes), delay=0.08) # 0.08s entre balas de ráfaga
+        else:
+            self.disparando_rafaga = False
 
     def iniciar_dash(self):
         dir_actual = Vec3(
@@ -835,6 +889,15 @@ class Jugador(Entity):
         if self.esta_muerto:
             return
             
+        # --- DISPARO AUTOMÁTICO ---
+        if held_keys['left mouse']:
+            if getattr(self, 'tiene_arma', False) and not getattr(self, 'haciendo_dash', False):
+                if getattr(self, 'armas_inventario', None):
+                    arma_data = self.armas_inventario[self.indice_arma_actual]
+                    # Solo disparamos automáticamente si tiene munición (evita recarga automática al mantener presionado)
+                    if arma_data.get('automatico', False) and arma_data.get('balas_cargador', 0) > 0:
+                        self.disparar()
+            
         # Limitar dt para evitar glitches físicos durante picos de lag (como al cargar el juego)
         dt = min(time.dt, 0.05)
         
@@ -929,9 +992,18 @@ class Jugador(Entity):
             self.pivot_camara.position = (1, 1.5, -4)
             giro_mouse = 0
         else:
-            self.pivot_camara.rotation_y = 0
-            self.pivot_camara.position = (1, 1.5, 0)
-            giro_mouse = mouse.velocity[0] * 40
+            if self.estado_animacion == 'drinking':
+                self.pivot_camara.rotation_y += mouse.velocity[0] * 40
+                self.pivot_camara.position = (0, 1.5, 0)
+                giro_mouse = 0
+                self._camara_rotada_bebiendo = True
+            else:
+                if getattr(self, '_camara_rotada_bebiendo', False):
+                    self.rotation_y += self.pivot_camara.rotation_y
+                    self._camara_rotada_bebiendo = False
+                self.pivot_camara.rotation_y = 0
+                self.pivot_camara.position = (1, 1.5, 0)
+                giro_mouse = mouse.velocity[0] * 40
         
         self.rotation_y += giro_mouse
         self.pivot_camara.rotation_x -= mouse.velocity[1] * 40
