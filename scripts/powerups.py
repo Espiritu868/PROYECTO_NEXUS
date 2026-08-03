@@ -70,7 +70,7 @@ class PowerUp(Entity):
     def recoger(self, jugador):
         # Lógica al recoger el powerup
         if self.tipo == 'max_salud':
-            jugador.vida = 100
+            jugador.vida = getattr(jugador, 'vida_maxima', 100)
             if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡SALUD MÁXIMA!")
         elif self.tipo == 'max_municion':
             if hasattr(jugador, 'balas_cargador'):
@@ -102,10 +102,11 @@ class PowerUp(Entity):
                 jugador.activar_powerup(self.tipo, duracion=20.0, nombre_mostrar=nombres.get(self.tipo, self.tipo))
             
         # Actualizar la interfaz de usuario del jugador para reflejar cambios en salud
+        vida_max = getattr(jugador, 'vida_maxima', 100)
         if hasattr(jugador, 'texto_vida'):
-            jugador.texto_vida.text = f'{max(0, jugador.vida)} / 100'
+            jugador.texto_vida.text = f'{max(0, int(jugador.vida))} / {vida_max}'
         if hasattr(jugador, 'barra_vida_fg'):
-            jugador.barra_vida_fg.scale_x = max(jugador.vida / 100.0, 0.0)
+            jugador.barra_vida_fg.scale_x = max(jugador.vida / float(vida_max), 0.0)
             
         # Reproducir sonido general de powerup si existiera
         

@@ -1,4 +1,4 @@
-from ursina import Entity, camera, Vec3, held_keys, time, raycast, mouse, clamp, load_texture, Text, color, destroy, invoke
+from ursina import Entity, camera, Vec3, held_keys, time, raycast, mouse, clamp, load_texture, Text, color, destroy, invoke, scene
 from direct.actor.Actor import Actor
 import math
 
@@ -106,6 +106,17 @@ class Jugador(Entity):
             
             # Amplificamos la escala (120) validada por el usuario
             self.modelo_visual.scale = (120, 120, 120)           
+            
+            # --- SEGUIMIENTO DE HUESO PARA EL ARMA ---
+            try:
+                hueso = self.actor.exposeJoint(None, 'modelRoot', 'mixamorig:RightHand')
+                if not hueso:
+                    hueso = self.actor.exposeJoint(None, 'modelRoot', 'RightHand')
+                self.mano_derecha_hueso = hueso
+            except Exception as e:
+                print("Error vinculando hueso de mano:", e)
+                self.mano_derecha_hueso = None
+                
         except Exception as e:
             print(f"=================================")
             print(f"ERROR CARGANDO EL JUGADOR GLB: {e}")
@@ -143,6 +154,54 @@ class Jugador(Entity):
         self.vida = 100
         self.vida_maxima = 100
         self.esta_muerto = False
+        
+        # Diccionario maestro de offsets por arma
+        self.offsets_por_arma = {
+            'M4A1': {
+                'pos_idle': Vec3(-0.032, 0.051, 0.437),
+                'pos_move': Vec3(-0.077, 0.033, 0.364),
+                'rot': Vec3(2.785, 82.343, 0.000),
+                'escala': 0.167,
+                'bala': Vec3(0.186, 1.815, 0.624)
+            },
+            'SCAR': {
+                'pos_idle': Vec3(0.000, 0.000, 0.233),
+                'pos_move': Vec3(0.000, 0.000, 0.233),
+                'rot': Vec3(0.000, 79.770, 0.000),
+                'escala': 0.559,
+                'bala': Vec3(0.136, 1.774, 0.797)
+            },
+            'RAYGUN': {
+                'pos_idle': Vec3(0.012, 0.067, 0.363),
+                'pos_move': Vec3(0.012, 0.067, 0.363),
+                'rot': Vec3(0.000, 90.110, 0.000),
+                'escala': 0.256,
+                'bala': Vec3(0.194, 1.851, 0.789)
+            },
+            'RAYGUN_MK2': {
+                'pos_idle': Vec3(0.000, 0.072, 0.397),
+                'pos_move': Vec3(0.000, 0.072, 0.397),
+                'rot': Vec3(0.000, 81.010, 0.000),
+                'escala': 0.302,
+                'bala': Vec3(0.183, 1.838, 0.675)
+            }
+        }
+        
+        # Valores activos (se sobreescriben al cargar un arma)
+        self.arma_offset_rot = Vec3(0, 0, 0)
+        self.arma_escala = 0.1
+        self.arma_offset_pos_idle = Vec3(0,0,0)
+        self.arma_offset_pos_move = Vec3(0,0,0)
+        self.arma_offset_pos_actual = Vec3(0,0,0)
+        self.bala_offset = Vec3(0,0,0)
+        
+        self.modo_debug_editando = 'ARMA' # 'ARMA' o 'BALA'
+        self.camara_frontal = False
+        
+        self.texto_debug_arma = Text(parent=camera.ui, text="", position=(-0.85, 0.45), scale=1, color=color.yellow, background=True)
+        self.debug_bala_visual = Entity(model='sphere', color=color.red, scale=0.05, parent=scene, unlit=True, enabled=False)
+        
+        self.debug_timer = 0
         self.barra_vida_bg = Entity(parent=camera.ui, model='quad', color=color.rgba(0.1, 0.1, 0.1, 0.9), scale=(0.25, 0.015), position=(0, -0.45))
         self.barra_vida_fg = Entity(parent=self.barra_vida_bg, model='quad', color=color.rgba(0.0, 0.8, 0.0, 1.0), scale=(1, 1), position=(-0.5, 0), origin=(-0.5, 0))
         self.texto_vida = Text(parent=camera.ui, text=f'{self.vida} / {self.vida_maxima}', position=(0, -0.42), origin=(0, 0), scale=0.9, color=color.white)
@@ -260,13 +319,9 @@ class Jugador(Entity):
     def input(self, key):
         if self.esta_muerto: return
         
-        # --- TEST ESCALA ---
-        if key == '+':
-            self.modelo_visual.scale *= 1.5
-            print(f"NUEVA ESCALA: {self.modelo_visual.scale}")
-        elif key == '-':
-            self.modelo_visual.scale *= 0.75
-            print(f"NUEVA ESCALA: {self.modelo_visual.scale}")
+        if key == 'control':
+            self.camara_frontal = not self.camara_frontal
+
         # CHEAT CODES
         if len(key) == 1 and key.isalpha():
             self.teclas_escritas += key.lower()
@@ -376,11 +431,17 @@ class Jugador(Entity):
         if not modelo_existente:
             modelo_existente = Entity(model='assets/modelos/objetos_con_meshy/arma.glb')
             
+        # ANCLAJE AL JUGADOR (Evita el bug de Euler, hereda la rotación del jugador pero no la escala del hueso)
         modelo_existente.parent = self
         modelo_existente.collider = None
-        modelo_existente.position = (0.8, 1.2, 0.5)
-        modelo_existente.scale = 0.1
-        modelo_existente.rotation = (0, 0, 0)
+
+        # Detener CUALQUIER animación residual del powerup (como el giro infinito)
+        if hasattr(modelo_existente, 'sequences'):
+            for seq in modelo_existente.sequences:
+                seq.pause()
+                seq.kill()
+            modelo_existente.sequences = []
+            
         if hasattr(modelo_existente, 'animations'):
             for seq in modelo_existente.animations:
                 seq.pause()
@@ -427,6 +488,32 @@ class Jugador(Entity):
         self.arma_entidad.enabled = True
         
         self.actualizar_hud_municion()
+        self.cargar_offsets_arma()
+
+    def cargar_offsets_arma(self):
+        if not getattr(self, 'armas_inventario', None) or self.indice_arma_actual >= len(self.armas_inventario):
+            return
+            
+        arma_data = self.armas_inventario[self.indice_arma_actual]
+        id_arma = arma_data.get('id_arma', 'DEFAULT')
+        
+        if id_arma not in self.offsets_por_arma:
+            # Creamos un perfil en blanco para esta arma si no existe
+            self.offsets_por_arma[id_arma] = {
+                'pos_idle': Vec3(0,0,0),
+                'pos_move': Vec3(0,0,0),
+                'rot': Vec3(0,0,0),
+                'escala': 0.1,
+                'bala': Vec3(0,0,0)
+            }
+            
+        data = self.offsets_por_arma[id_arma]
+        self.arma_offset_pos_idle = Vec3(*data['pos_idle'])
+        self.arma_offset_pos_move = Vec3(*data['pos_move'])
+        self.arma_offset_pos_actual = Vec3(*data['pos_idle'])
+        self.arma_offset_rot = Vec3(*data['rot'])
+        self.arma_escala = data['escala']
+        self.bala_offset = Vec3(*data['bala'])
 
     def recargar(self):
         arma_data = self.armas_inventario[self.indice_arma_actual]
@@ -523,8 +610,21 @@ class Jugador(Entity):
         self.actualizar_hud_municion()
         self.ultimo_disparo = time.time()
         
-        origen_disparo = self.arma_entidad.world_position if self.arma_entidad else self.world_position + Vec3(0, 1.5, 0)
-        direccion_disparo = camera.forward # Dispara hacia donde mira la cámara
+        # 1. Origen físico del disparo (el cañón del arma)
+        origen_disparo = self.world_position + self.up * self.bala_offset.y + self.right * self.bala_offset.x + self.forward * self.bala_offset.z
+        
+        # 2. ¿A qué está apuntando el punto blanco (mira) realmente?
+        # Lanzamos un rayo desde el centro de la pantalla hacia adelante
+        hit_mira = raycast(camera.world_position, camera.forward, distance=1000, ignore=(self, self.modelo_visual, self.pivot_camara))
+        
+        if hit_mira.hit:
+            punto_objetivo = hit_mira.world_point
+        else:
+            # Si miras al cielo vacío, el objetivo es un punto muy lejano
+            punto_objetivo = camera.world_position + camera.forward * 1000
+            
+        # 3. La bala viaja en diagonal desde el arma hacia el objetivo visual
+        direccion_disparo = (punto_objetivo - origen_disparo).normalized()
         
         # Retroceso visual básico
         if self.arma_entidad:
@@ -532,6 +632,9 @@ class Jugador(Entity):
             self.arma_entidad.animate_position((0.8, 1.2, 0.5), duration=0.1, delay=0.05)
         
         Bala(posicion_inicial=origen_disparo, direccion=direccion_disparo, dano=35, jugador_obj=self)
+        if 'doble_cadencia' in self.powerups_activos:
+            # Disparamos una segunda bala en la misma instancia para que sea literalmente "doble disparo"
+            Bala(posicion_inicial=origen_disparo + self.right * 0.1, direccion=direccion_disparo, dano=35, jugador_obj=self)
 
     def iniciar_dash(self):
         dir_actual = Vec3(
@@ -734,15 +837,102 @@ class Jugador(Entity):
             
         # Limitar dt para evitar glitches físicos durante picos de lag (como al cargar el juego)
         dt = min(time.dt, 0.05)
+        
+        # --- SEGUIMIENTO EXACTO DEL ARMA A LA MANO (CON INTERPOLACIÓN IDLE/MOVE) ---
+        is_moving = held_keys['w'] or held_keys['s'] or held_keys['a'] or held_keys['d']
+        target_pos = self.arma_offset_pos_move if is_moving else self.arma_offset_pos_idle
+        self.arma_offset_pos_actual = lerp(self.arma_offset_pos_actual, target_pos, dt * 10)
+        
+        if getattr(self, 'tiene_arma', False) and getattr(self, 'arma_entidad', None) and getattr(self, 'mano_derecha_hueso', None):
+            pos_mano = self.mano_derecha_hueso.getPos(scene)
+            offset_global = (self.right * self.arma_offset_pos_actual.x) + (self.up * self.arma_offset_pos_actual.y) + (self.forward * self.arma_offset_pos_actual.z)
+            self.arma_entidad.world_position = pos_mano + offset_global
+            self.arma_entidad.rotation = self.arma_offset_rot
+            self.arma_entidad.scale = self.arma_escala
 
-        # --- CONTROL DE CÁMARA ---
-        if held_keys['control']:
+        # --- MODO DEBUG MAESTRO (MANTENER ALT) ---
+        if held_keys['alt'] and getattr(self, 'tiene_arma', False):
+            if held_keys['1']: self.modo_debug_editando = 'ARMA'
+            if held_keys['2']: self.modo_debug_editando = 'BALA'
+            
+            arma_data = self.armas_inventario[self.indice_arma_actual]
+            id_arma = arma_data.get('id_arma', 'DEFAULT')
+            
+            velocidad_mov = 0.5 * dt
+            velocidad_rot = 100 * dt
+            velocidad_escala = 0.1 * dt
+            
+            if self.modo_debug_editando == 'ARMA':
+                self.debug_bala_visual.enabled = False
+                self.texto_debug_arma.text = f"[MODO DEBUG: {id_arma}]\n[1] ARMA | [2] BALA\n\nMover Arma:\nAdelante/Atras: I / K\nIzq/Der: J / L\nArriba/Abajo: U / O\n\nRotar:\nArriba/Abajo (Pitch): Flechas\nLados (Yaw): Flechas\nGirar (Roll): N / M\n\nEscala: + / -\nGuardar: P"
+                
+                # Posición (I/K=Z, J/L=X, U/O=Y)
+                if held_keys['i']: self.arma_offset_pos_idle.z += velocidad_mov; self.arma_offset_pos_move.z += velocidad_mov
+                if held_keys['k']: self.arma_offset_pos_idle.z -= velocidad_mov; self.arma_offset_pos_move.z -= velocidad_mov
+                if held_keys['j']: self.arma_offset_pos_idle.x -= velocidad_mov; self.arma_offset_pos_move.x -= velocidad_mov
+                if held_keys['l']: self.arma_offset_pos_idle.x += velocidad_mov; self.arma_offset_pos_move.x += velocidad_mov
+                if held_keys['u']: self.arma_offset_pos_idle.y += velocidad_mov; self.arma_offset_pos_move.y += velocidad_mov
+                if held_keys['o']: self.arma_offset_pos_idle.y -= velocidad_mov; self.arma_offset_pos_move.y -= velocidad_mov
+
+                # Rotación (Flechas = X/Y, N/M = Z)
+                if held_keys['up arrow']: self.arma_offset_rot.x += velocidad_rot
+                if held_keys['down arrow']: self.arma_offset_rot.x -= velocidad_rot
+                if held_keys['left arrow']: self.arma_offset_rot.y -= velocidad_rot
+                if held_keys['right arrow']: self.arma_offset_rot.y += velocidad_rot
+                if held_keys['n']: self.arma_offset_rot.z -= velocidad_rot
+                if held_keys['m']: self.arma_offset_rot.z += velocidad_rot
+
+                # Escala (+/-)
+                if held_keys['+']: self.arma_escala += velocidad_escala
+                if held_keys['-']: self.arma_escala -= velocidad_escala
+                
+            elif self.modo_debug_editando == 'BALA':
+                self.debug_bala_visual.enabled = True
+                self.texto_debug_arma.text = f"[MODO DEBUG: {id_arma}]\n[1] ARMA | [2] BALA\n\nMover Origen de Bala:\nAdelante/Atras: I / K\nIzq/Der: J / L\nArriba/Abajo: U / O\n\nGuardar Consola: P"
+                
+                origen = self.world_position + self.up * self.bala_offset.y + self.right * self.bala_offset.x + self.forward * self.bala_offset.z
+                self.debug_bala_visual.world_position = origen
+                
+                # Posición (I/K=Z, J/L=X, U/O=Y)
+                if held_keys['i']: self.bala_offset.z += velocidad_mov
+                if held_keys['k']: self.bala_offset.z -= velocidad_mov
+                if held_keys['j']: self.bala_offset.x -= velocidad_mov
+                if held_keys['l']: self.bala_offset.x += velocidad_mov
+                if held_keys['u']: self.bala_offset.y += velocidad_mov
+                if held_keys['o']: self.bala_offset.y -= velocidad_mov
+
+            # Guardar el estado actual en el diccionario
+            self.offsets_por_arma[id_arma] = {
+                'pos_idle': self.arma_offset_pos_idle,
+                'pos_move': self.arma_offset_pos_move,
+                'rot': self.arma_offset_rot,
+                'escala': self.arma_escala,
+                'bala': self.bala_offset
+            }
+
+            # Imprimir en consola con la tecla P
+            if held_keys['p']:
+                print("\n==================================")
+                print(f"VALORES PERFECTOS PARA: {id_arma}")
+                print(f"                'pos_idle': Vec3({self.arma_offset_pos_idle.x:.3f}, {self.arma_offset_pos_idle.y:.3f}, {self.arma_offset_pos_idle.z:.3f}),")
+                print(f"                'pos_move': Vec3({self.arma_offset_pos_move.x:.3f}, {self.arma_offset_pos_move.y:.3f}, {self.arma_offset_pos_move.z:.3f}),")
+                print(f"                'rot': Vec3({self.arma_offset_rot.x:.3f}, {self.arma_offset_rot.y:.3f}, {self.arma_offset_rot.z:.3f}),")
+                print(f"                'escala': {self.arma_escala:.3f},")
+                print(f"                'bala': Vec3({self.bala_offset.x:.3f}, {self.bala_offset.y:.3f}, {self.bala_offset.z:.3f})")
+                print("==================================\n")
+        else:
+            self.debug_bala_visual.enabled = False
+            if hasattr(self, 'texto_debug_arma'):
+                self.texto_debug_arma.text = ""
+        if self.camara_frontal:
             self.pivot_camara.rotation_y = 180
-            giro_mouse = 0 
+            self.pivot_camara.position = (1, 1.5, -4)
+            giro_mouse = 0
         else:
             self.pivot_camara.rotation_y = 0
+            self.pivot_camara.position = (1, 1.5, 0)
             giro_mouse = mouse.velocity[0] * 40
-
+        
         self.rotation_y += giro_mouse
         self.pivot_camara.rotation_x -= mouse.velocity[1] * 40
         
