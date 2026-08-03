@@ -51,7 +51,7 @@ class CampoFuerzaProtector(Entity):
             **kwargs
         )
         self.jugador = jugador_obj
-        self.animate_scale(40, duration=1.5) # Expansión épica hasta 40m de diámetro
+        self.animate_scale(80, duration=1.5) # Expansión épica hasta 80m de diámetro
         
     def update(self):
         import __main__ as main
@@ -1190,6 +1190,7 @@ class Jugador(Entity):
         if self.actor:
             if hasattr(self, 'arma_entidad') and self.arma_entidad:
                 self.arma_entidad.enabled = False
+            self.actor.setPlayRate(1.0, 'drinking')
             self.actor.play('drinking')
             self.estado_animacion = 'drinking'
             self.atacando = True # bloquea el movimiento
@@ -1202,17 +1203,32 @@ class Jugador(Entity):
             
             self.campo_fuerza = CampoFuerzaProtector(self, color.rgba(*color_campo.rgba[:3], 100))
             
-            invoke(lambda: self.finalizar_bebida(), delay=3.5)
+            # La animación hacia adelante dura unos 2 segundos
+            invoke(self.reversa_bebida, delay=2.0)
 
-    def finalizar_bebida(self):
-        self.atacando = False
-        if hasattr(self, 'campo_fuerza'):
-            destroy(self.campo_fuerza)
+    def reversa_bebida(self):
+        if self.actor and not self.esta_muerto:
+            self.actor.setPlayRate(-1.5, 'drinking') # Reversa rápida para mejor transición
+            self.actor.play('drinking')
             
-        if not self.esta_muerto:
+        invoke(self.terminar_animacion_bebida, delay=1.2)
+
+    def terminar_animacion_bebida(self):
+        self.atacando = False
+        if self.actor and not self.esta_muerto:
+            self.actor.setPlayRate(1.0, 'drinking') # Restaurar play rate
             self.cambiar_animacion('idle')
             if hasattr(self, 'arma_entidad') and self.arma_entidad:
                 self.arma_entidad.enabled = True
+                
+        # El círculo protector se queda por 3 segundos extra
+        invoke(self.destruir_campo_fuerza, delay=3.0)
+
+    def destruir_campo_fuerza(self):
+        if hasattr(self, 'campo_fuerza') and self.campo_fuerza:
+            self.campo_fuerza.animate_scale(0, duration=0.5)
+            destroy(self.campo_fuerza, delay=0.5)
+            self.campo_fuerza = None
 
     def actualizar_ui_perks(self):
         # Limpiar iconos anteriores

@@ -73,7 +73,12 @@ class PowerUp(Entity):
             jugador.vida = getattr(jugador, 'vida_maxima', 100)
             if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡SALUD MÁXIMA!")
         elif self.tipo == 'max_municion':
-            if hasattr(jugador, 'balas_cargador'):
+            if hasattr(jugador, 'armas_inventario'):
+                for arma in jugador.armas_inventario:
+                    arma['balas_cargador'] = arma.get('max_cargador', 25)
+                    arma['balas_reserva'] = arma.get('max_reserva', 300)
+                if hasattr(jugador, 'actualizar_hud_municion'): jugador.actualizar_hud_municion()
+            elif hasattr(jugador, 'balas_cargador'):
                 jugador.balas_cargador = getattr(jugador, 'balas_cargador_max', 25)
                 jugador.balas_reserva = getattr(jugador, 'balas_reserva_max', 300)
                 if hasattr(jugador, 'actualizar_hud_municion'): jugador.actualizar_hud_municion()
