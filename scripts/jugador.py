@@ -1073,7 +1073,7 @@ class Jugador(Entity):
             dir_x = 1 if desplazamiento.x > 0 else -1
             dist_x = abs(desplazamiento.x) + 0.35
             hit_x = raycast(self.position + Vec3(0, 1.0, 0), direction=(dir_x, 0, 0), distance=dist_x, ignore=entidades_ignoradas)
-            if not hit_x.hit or hit_x.distance <= 0.05:
+            if not hit_x.hit:
                 self.x += desplazamiento.x
             elif hasattr(hit_x.entity, 'jugador_objetivo'):
                 # Empujar suavemente al enemigo para abrirnos paso si estamos acorralados
@@ -1084,7 +1084,7 @@ class Jugador(Entity):
             dir_z = 1 if desplazamiento.z > 0 else -1
             dist_z = abs(desplazamiento.z) + 0.35
             hit_z = raycast(self.position + Vec3(0, 1.0, 0), direction=(0, 0, dir_z), distance=dist_z, ignore=entidades_ignoradas)
-            if not hit_z.hit or hit_z.distance <= 0.05:
+            if not hit_z.hit:
                 self.z += desplazamiento.z
             elif hasattr(hit_z.entity, 'jugador_objetivo'):
                 hit_z.entity.z += desplazamiento.z * 0.8

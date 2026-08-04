@@ -1,5 +1,6 @@
 from ursina import Entity, load_texture, time, Vec3, raycast, distance, scene, curve
 import math
+import random
 
 class EnemigoBase(Entity):
     def __init__(self, ruta_modelo, ruta_textura, base_folder='', prefix='', **kwargs):
@@ -84,7 +85,7 @@ class EnemigoBase(Entity):
         self.en_suelo = False
         
         self.distancia_deteccion = 50
-        self.distancia_ataque = 2.5
+        self.distancia_ataque = 1.3
         self.tiempo_entre_ataques = 1.5
         self.ultimo_ataque = 0
         self.jugador_objetivo = None
@@ -147,9 +148,9 @@ class EnemigoBase(Entity):
             self.en_suelo = False
             
         # --- REPELENCIA FÍSICA SUAVE ---
-        # Si el enemigo y el jugador se empalman mucho (< 1.5 metros), se empuja suavemente al enemigo hacia afuera
+        # Si el enemigo y el jugador se empalman mucho (< 0.8 metros), se empuja suavemente al enemigo hacia afuera
         # Esto evita que el jugador se quede "atascado" dentro de la hitbox del enemigo
-        if dist_jugador < 1.5:
+        if dist_jugador < 0.8:
             vector_empuje = self.position - self.jugador_objetivo.position
             vector_empuje.y = 0
             if vector_empuje.length() > 0:
@@ -178,34 +179,57 @@ class EnemigoBase(Entity):
                 # MICRO-PAUSA POST ATAQUE: Si acaba de atacar, se queda quieto 1 segundo
                 if time.time() - self.ultimo_ataque > 1.0:
                     
-                    # 2. FIX: Lógica de Paredes/Rodeo combinada y fluida
-                    hit_avance = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=self.velocidad * time.dt + 0.8, ignore=(self, self.jugador_objetivo))
+                    en_movimiento = True
                     
-                    if not hit_avance.hit:
-                        # Camino libre, avanzar directo hacia el jugador
-                        self.position += self.forward * self.velocidad * time.dt
-                        en_movimiento = True
-                    else:
-                        # Hay una pared. Intentar rodearla (Deslizarse por el borde)
-                        if self.en_suelo:
-                            self.velocidad_y = self.velocidad_salto # Saltar por si es un obstáculo pequeño
-                            self.en_suelo = False
+                    # --- CACHÉ DE RAYCAST (Throttling a 5 FPS para físicas) ---
+                    # Revisamos el obstáculo frontal solo cada 0.2s, pero comprobando a una distancia mayor
+                    entidades_ignoradas = [self, self.jugador_objetivo]
+                    if hasattr(self.jugador_objetivo, 'modelo_visual'): entidades_ignoradas.append(self.jugador_objetivo.modelo_visual)
+                    if hasattr(self.jugador_objetivo, 'pivot_camara'): entidades_ignoradas.append(self.jugador_objetivo.pivot_camara)
+                    
+                    if time.time() - getattr(self, 'tiempo_ultimo_raycast', 0) > 0.2:
+                        self.tiempo_ultimo_raycast = time.time()
                         
-                        import random
-                        # Cambiar de idea ocasionalmente para evitar ciclos infinitos
-                        if not hasattr(self, 'direccion_rodeo') or random.random() < 0.05:
-                            self.direccion_rodeo = random.choice([-1, 1])
-                            
-                        direccion_lateral = self.right * getattr(self, 'direccion_rodeo', 1)
-                        hit_lateral = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_lateral, distance=(self.velocidad * 1.5) * time.dt + 1.0, ignore=(self, self.jugador_objetivo))
+                        distancia_proyectada = (self.velocidad * 0.2) + 1.0
                         
-                        if not hit_lateral.hit:
-                            # Bordeando la pared a mayor velocidad para compensar el desvío
-                            self.position += direccion_lateral * (self.velocidad * 1.5) * time.dt
-                            en_movimiento = True
+                        hit_avance = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=distancia_proyectada, ignore=tuple(entidades_ignoradas))
+                        
+                        if not hit_avance.hit:
+                            self.obstaculo_enfrente = False
+                            self.normal_pared = None
                         else:
-                            # Atrapado en una esquina (hay pared enfrente y a los lados) -> dar la vuelta
-                            self.direccion_rodeo *= -1
+                            self.obstaculo_enfrente = True
+                            self.normal_pared = hit_avance.world_normal
+                            
+                    # --- DESPLAZAMIENTO FLUIDO ---
+                    if not self.obstaculo_enfrente:
+                        # Camino libre
+                        self.position += self.forward * self.velocidad * time.dt
+                    else:
+                        # --- SISTEMA DE SLIDING (Deslizamiento Matemático) ---
+                        vector_mov = self.forward
+                        
+                        if getattr(self, 'normal_pared', None):
+                            # Eliminamos del vector de movimiento la parte que empuja contra la pared
+                            dot_product = vector_mov.dot(self.normal_pared)
+                            vector_deslizamiento = vector_mov - (self.normal_pared * dot_product)
+                            
+                            if vector_deslizamiento.length() > 0:
+                                vector_deslizamiento = vector_deslizamiento.normalized()
+                                # Raycast rápido para confirmar que la ruta de deslizamiento está libre
+                                hit_deslizamiento = raycast(self.position + Vec3(0, 0.5, 0), direction=vector_deslizamiento, distance=(self.velocidad * time.dt) + 0.5, ignore=tuple(entidades_ignoradas))
+                                
+                                if not hit_deslizamiento.hit:
+                                    self.position += vector_deslizamiento * self.velocidad * time.dt
+                                else:
+                                    en_movimiento = False
+                        else:
+                            en_movimiento = False
+
+                        # Ocasionalmente intentar saltar obstáculos bajos si está atascado
+                        if not en_movimiento and self.en_suelo and random.random() < 0.1:
+                            self.velocidad_y = self.velocidad_salto
+                            self.en_suelo = False
 
                         # IA: ESQUIVA ALEATORIA (DASH LATERAL)
                         if not hasattr(self, 'ultimo_tiempo_esquiva'):
@@ -220,7 +244,11 @@ class EnemigoBase(Entity):
                                 self.direccion_esquiva = 0
                                 
                         if time.time() - self.ultimo_tiempo_esquiva < 0.5 and self.direccion_esquiva != 0:
-                            self.position += self.right * (self.velocidad * 2.5) * self.direccion_esquiva * time.dt
+                            direccion_esq = self.right * self.direccion_esquiva
+                            dist_esq = (self.velocidad * 2.5) * time.dt
+                            hit_esq = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_esq, distance=dist_esq + 1.0, ignore=tuple(entidades_ignoradas))
+                            if not hit_esq.hit:
+                                self.position += direccion_esq * dist_esq
             else:
                 # 2. Atacar al jugador
                 self.atacar()
