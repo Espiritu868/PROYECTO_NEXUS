@@ -194,12 +194,17 @@ class EnemigoBase(Entity):
                         
                         hit_avance = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=distancia_proyectada, ignore=tuple(entidades_ignoradas))
                         
-                        if not hit_avance.hit:
+                        if not hit_avance.hit or hasattr(hit_avance.entity, 'jugador_objetivo'):
                             self.obstaculo_enfrente = False
                             self.normal_pared = None
                         else:
                             self.obstaculo_enfrente = True
                             self.normal_pared = hit_avance.world_normal
+                            # DEBUG: Print what the enemy is hitting
+                            if hasattr(hit_avance.entity, 'name'):
+                                print(f"DEBUG: Enemigo detectó obstáculo: {hit_avance.entity.name} (Tipo: {type(hit_avance.entity)})")
+                            else:
+                                print(f"DEBUG: Enemigo detectó obstáculo: {hit_avance.entity} (Tipo: {type(hit_avance.entity)})")
                             
                     # --- DESPLAZAMIENTO FLUIDO ---
                     if not self.obstaculo_enfrente:
@@ -219,7 +224,7 @@ class EnemigoBase(Entity):
                                 # Raycast rápido para confirmar que la ruta de deslizamiento está libre
                                 hit_deslizamiento = raycast(self.position + Vec3(0, 0.5, 0), direction=vector_deslizamiento, distance=(self.velocidad * time.dt) + 0.5, ignore=tuple(entidades_ignoradas))
                                 
-                                if not hit_deslizamiento.hit:
+                                if not hit_deslizamiento.hit or hasattr(hit_deslizamiento.entity, 'jugador_objetivo'):
                                     self.position += vector_deslizamiento * self.velocidad * time.dt
                                 else:
                                     en_movimiento = False
@@ -247,7 +252,7 @@ class EnemigoBase(Entity):
                             direccion_esq = self.right * self.direccion_esquiva
                             dist_esq = (self.velocidad * 2.5) * time.dt
                             hit_esq = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_esq, distance=dist_esq + 1.0, ignore=tuple(entidades_ignoradas))
-                            if not hit_esq.hit:
+                            if not hit_esq.hit or hasattr(hit_esq.entity, 'jugador_objetivo'):
                                 self.position += direccion_esq * dist_esq
             else:
                 # 2. Atacar al jugador
