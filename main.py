@@ -1,3 +1,6 @@
+from panda3d.core import loadPrcFileData
+loadPrcFileData('', 'max-texture-dimension 2048')
+
 from ursina import Ursina, DirectionalLight, AmbientLight, color, window, application, scene, Entity, Text, camera, invoke, destroy
 import random
 
