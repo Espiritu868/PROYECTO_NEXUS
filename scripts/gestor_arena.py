@@ -231,7 +231,7 @@ class GestorArena(Entity):
                     self.ronda_actual = 1
                     
                 if not hasattr(self, 'max_rondas'):
-                    self.max_rondas = 3
+                    self.max_rondas = float('inf')
                 
                 # Drop de Pieza (Misión RECOLECTAR) al superar una ronda (si no es infinita)
                 if self.gestor_portal and self.gestor_portal.tipo_mision == "RECOLECTAR" and self.ronda_actual <= 5:
