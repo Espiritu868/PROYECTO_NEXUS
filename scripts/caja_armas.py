@@ -1,4 +1,4 @@
-from ursina import Entity, color, distance, held_keys, time, invoke, Text, destroy, curve
+from ursina import Entity, color, distance, held_keys, time, invoke, Text, destroy, curve, Audio
 import random
 
 class CajaMisteriosa(Entity):
@@ -86,6 +86,9 @@ class CajaMisteriosa(Entity):
         self.tiempo_giro = 5.0
         self.inicio_giro = time.time()
         
+        self.sonido_apertura = Audio('assets/sonidos/sonido de caja abriendo.mpeg', autoplay=True)
+        invoke(destroy, self.sonido_apertura, delay=6.0)
+        
         self.arma_visual = Entity(parent=self, position=(0, -0.5, 0), scale=0.3)
         self.arma_visual.animate_position((0, 1.5, 0), duration=1.0)
         
@@ -121,6 +124,13 @@ class CajaMisteriosa(Entity):
     def entregar_arma(self, jugador):
         if not self.arma_mostrada: return
         
+        if hasattr(self, 'sonido_apertura') and self.sonido_apertura:
+            try:
+                self.sonido_apertura.stop()
+            except Exception:
+                pass
+        Audio('assets/sonidos/sonido_de_la_caja_cuando_se_va.mp3', autoplay=True)
+        
         arma_nueva = Entity(model=self.arma_mostrada['modelo'])
         jugador.equipar_arma(modelo_existente=arma_nueva, id_arma=self.arma_mostrada['id'])
         
@@ -138,6 +148,13 @@ class CajaMisteriosa(Entity):
     def iniciar_movimiento(self):
         self.estado = 'moviendose'
         self.ocultar_texto()
+        
+        if hasattr(self, 'sonido_apertura') and self.sonido_apertura:
+            try:
+                self.sonido_apertura.stop()
+            except Exception:
+                pass
+        Audio('assets/sonidos/sonido_de_la_caja_cuando_se_va.mp3', autoplay=True)
         
         # Animación de despedida (juguete/arma flotando que luego se va volando o la caja se hunde)
         self.model = 'assets/modelos/objetos_con_meshy/objetos/boxopen.glb'

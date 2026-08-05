@@ -68,11 +68,14 @@ class PowerUp(Entity):
                 self.recoger(jugador)
                     
     def recoger(self, jugador):
+        from ursina import Audio
         # Lógica al recoger el powerup
         if self.tipo == 'max_salud':
+            Audio('assets/sonidos/maxima vida.wav', autoplay=True)
             jugador.vida = getattr(jugador, 'vida_maxima', 100)
             if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡SALUD MÁXIMA!")
         elif self.tipo == 'max_municion':
+            Audio('assets/sonidos/municion maxima.mp3', autoplay=True)
             if hasattr(jugador, 'armas_inventario'):
                 for arma in jugador.armas_inventario:
                     arma['balas_cargador'] = arma.get('max_cargador', 25)
@@ -84,6 +87,7 @@ class PowerUp(Entity):
                 if hasattr(jugador, 'actualizar_hud_municion'): jugador.actualizar_hud_municion()
             if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡MUNICIÓN MÁXIMA!")
         elif self.tipo == 'bomba':
+            Audio('assets/sonidos/Efecto kapoom.mp3', autoplay=True)
             if hasattr(jugador, 'mostrar_mensaje_powerup'): jugador.mostrar_mensaje_powerup("¡BOMBA TÁCTICA!")
             from ursina import scene
             for e in scene.entities:
@@ -97,6 +101,11 @@ class PowerUp(Entity):
                 self.update = lambda: None
             return
         elif self.tipo in ['velocidad', 'insta_kill', 'doble_cadencia', 'recarga_rapida']:
+            if self.tipo == 'insta_kill':
+                Audio('assets/sonidos/insta kill.mp3', autoplay=True)
+            elif self.tipo == 'recarga_rapida':
+                Audio('assets/sonidos/recarga rapida.mp3', autoplay=True)
+            
             if hasattr(jugador, 'activar_powerup'):
                 nombres = {
                     'velocidad': 'Velocidad Extrema', 

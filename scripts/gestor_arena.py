@@ -304,6 +304,13 @@ class GestorArena(Entity):
                         
                     import time
                     self.tiempo_inicio_ronda = time.time()
+                    
+                    try:
+                        from ursina import Audio
+                        Audio('assets/sonidos/intro de rondas.mp3', autoplay=True)
+                    except:
+                        pass
+                        
                     from ursina import Text, color, destroy
                     texto_ronda = Text(text=f"¡Ronda {self.ronda_actual} Iniciada!\n<white>Prepárate, aquí viene la horda...", origin=(0, 0), scale=4, color=color.red, y=0.1)
                     texto_ronda.animate_color(color.rgba(255, 0, 0, 0), duration=4, delay=2.0)

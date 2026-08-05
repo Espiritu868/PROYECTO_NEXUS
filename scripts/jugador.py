@@ -1,4 +1,4 @@
-from ursina import Entity, camera, Vec3, held_keys, time, raycast, mouse, clamp, load_texture, Text, color, destroy, invoke, scene
+from ursina import Entity, camera, Vec3, held_keys, time, raycast, mouse, clamp, load_texture, Text, color, destroy, invoke, scene, Audio
 from direct.actor.Actor import Actor
 import math
 
@@ -239,6 +239,11 @@ class Jugador(Entity):
         self.tiene_arma = False
         self.arma_entidad = None
         self.ultimo_disparo = 0
+        
+        # --- PRECARGA DE AUDIOS DE ARMAS ---
+        self.sonido_m1911 = Audio('assets/sonidos/sonido_pistola.mpeg', autoplay=False)
+        self.sonido_scar = Audio('assets/sonidos/sonido scar.mp3', autoplay=False)
+        self.sonido_raygun = Audio('assets/sonidos/disparos rain gun.mp3', autoplay=False)
         
         # --- NUEVO: SISTEMA DE MUNICIÓN E INVENTARIO ---
         self.armas_inventario = [] # Lista de diccionarios con info de cada arma
@@ -659,6 +664,19 @@ class Jugador(Entity):
         # --- RECARGA AUTOMÁTICA AL VACIAR CARGADOR ---
         if arma_data['balas_cargador'] <= 0 and arma_data.get('balas_reserva', 0) > 0:
             self.recargar()
+            
+        # --- AUDIO DE DISPARO ---
+        id_arma = arma_data.get('id_arma')
+        if id_arma == 'RAYGUN':
+            self.sonido_raygun.stop()
+            self.sonido_raygun.play()
+        elif id_arma == 'RAYGUN_MK2':
+            Audio('assets/sonidos/disparo_mark2.mp3', autoplay=True)
+        elif id_arma == 'SCAR':
+            self.sonido_scar.stop()
+            self.sonido_scar.play()
+        elif id_arma == 'M1911':
+            self.sonido_m1911.play()
         
         # 1. Origen físico del disparo (el cañón del arma)
         origen_disparo = self.world_position + self.up * self.bala_offset.y + self.right * self.bala_offset.x + self.forward * self.bala_offset.z
