@@ -22,13 +22,13 @@ class GestorArena(Entity):
         self.tiempo_ultimo_spawn = 0
         
         # --- PRE-LOAD POOL DE ENEMIGOS (Evita congelamiento mid-game) ---
-        # Instanciamos 8 enemigos por arena durante la pantalla de carga
+        # Instanciamos 15 enemigos por arena durante la pantalla de carga para evitar lag
         import random
         from scripts.zombie import Zombie
         from scripts.villano_l import VillanoL
         from scripts.villano_o import VillanoO
         
-        for _ in range(8):
+        for _ in range(15):
             tipo_enemigo = random.choice([VillanoL, VillanoO, Zombie])
             # Se spawnean bajo tierra muy profundo para activar el culling espacial (>1000)
             enemigo = tipo_enemigo(position=(0, -2000, 0), rotation_y=0)
@@ -86,12 +86,11 @@ class GestorArena(Entity):
         else:
             progreso_ronda = 1.0
             
-        # Máximo de vivos permitidos (aumenta según avanza la ronda)
-        # Arena 0: 2 a 6
-        # Arena 1: 3 a 7
-        # Arena 2: 4 a 8
-        base_vivos = 2 + self.indice_arena
-        max_vivos_ronda = base_vivos + int(progreso_ronda * 4) 
+        # Máximo de vivos permitidos (aumenta dinámicamente hasta 15)
+        # La cantidad base dependerá del índice de la arena.
+        base_vivos = 4 + (self.indice_arena * 2) 
+        # Crecimiento agresivo basado en el progreso
+        max_vivos_ronda = min(15, base_vivos + int(progreso_ronda * 11)) 
         
         if getattr(self, 'max_rondas', 3) == float('inf'):
             max_vivos = 15 # Survival mode post-boss
@@ -172,8 +171,14 @@ class GestorArena(Entity):
                 
             rotacion_aleatoria = random.randint(0, 360)
 
+            ronda_actual = getattr(self, 'ronda_actual', 1)
             # Intentar reciclar un enemigo existente antes de crear uno nuevo para evitar lag
             reciclados = [e for e in self.enemigos if getattr(e, 'listo_para_reciclar', False)]
+            
+            # Restringir la aparición de Zombies locos antes de la ronda 3
+            if ronda_actual < 3:
+                reciclados = [e for e in reciclados if type(e).__name__ != 'Zombie']
+                
             if reciclados:
                 enemigo = random.choice(reciclados)
                 enemigo.listo_para_reciclar = False
@@ -181,11 +186,20 @@ class GestorArena(Entity):
                 enemigo.position = posicion_aleatoria
                 enemigo.rotation_y = rotacion_aleatoria
                 enemigo.curando = False
-                enemigo.velocidad = 10 if type(enemigo).__name__ == 'VillanoL' else 8 if type(enemigo).__name__ == 'VillanoO' else 6
+                if type(enemigo).__name__ == 'VillanoL':
+                    enemigo.velocidad = 4.8
+                elif type(enemigo).__name__ == 'VillanoO':
+                    enemigo.velocidad_normal = 2.5
+                    enemigo.velocidad = 2.5
+                elif type(enemigo).__name__ == 'Zombie':
+                    enemigo.velocidad_normal = 7.6
+                    enemigo.velocidad = 7.6
+                    enemigo.frenesi = False
                 
                 from ursina import time
+                import random
                 enemigo.ultimo_ataque = time.time()
-                enemigo.tiempo_ultimo_raycast = time.time()
+                enemigo.tiempo_ultimo_raycast = time.time() - random.uniform(0.0, 0.2)
 
                 
                 enemigo.enabled = True # Reactiva el enemigo completo
@@ -200,7 +214,11 @@ class GestorArena(Entity):
                     enemigo.modelo_visual.color = color.white
                     enemigo.modelo_visual.enabled = True
             else:
-                tipo_enemigo = random.choice([VillanoL, VillanoO, Zombie])
+                opciones = [VillanoL, VillanoO]
+                if getattr(self, 'ronda_actual', 1) >= 3:
+                    opciones.append(Zombie)
+                    
+                tipo_enemigo = random.choice(opciones)
                 enemigo = tipo_enemigo(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
                 self.enemigos.append(enemigo)
 
@@ -262,6 +280,11 @@ class GestorArena(Entity):
                         self.spawns_pendientes = self.cantidad_enemigos + (self.ronda_actual * 2)
                         
                     print(f"¡Inicia Ronda {self.ronda_actual}!")
+                    
+                    import __main__ as main
+                    if hasattr(main, 'power_up_service') and main.power_up_service:
+                        main.power_up_service.iniciar_siguiente_ronda()
+                        
                     import time
                     self.tiempo_inicio_ronda = time.time()
                     from ursina import Text, color, destroy

@@ -1,4 +1,4 @@
-from panda3d.core import loadPrcFileData
+from panda3d.core import loadPrcFileData # type: ignore
 loadPrcFileData('', 'max-texture-dimension 2048')
 
 from ursina import Ursina, DirectionalLight, AmbientLight, color, window, application, scene, Entity, Text, camera, invoke, destroy
@@ -7,8 +7,8 @@ import random
 # --- PARCHE PARA MODELOS GLB EXTERNOS ---
 # Al convertir FBX a GLB en internet, a veces dejan rutas absolutas a imágenes que no existen.
 # Este parche evita que Panda3D crashee y simplemente ignore esas texturas faltantes.
-import gltf._converter
-from panda3d.core import Texture
+import gltf._converter # type: ignore
+from panda3d.core import Texture # type: ignore
 original_load_texture = gltf._converter.Converter.load_texture
 
 def patched_load_texture(self, texid, gltf_tex, gltf_data):
@@ -29,6 +29,7 @@ from scripts.zombie import Zombie
 from scripts.gestor_arena import GestorArena
 from scripts.editor_nivel import EditorNivel
 from scripts.menu_pausa import MenuPausa, PantallaMuerte
+from scripts.menu_inicio import MenuInicio
 
 app = Ursina(title="Proyecto Nexo - Nivel 0")
 window.fullscreen = True
@@ -45,7 +46,8 @@ color_bruma = color.rgba(0.01, 0.01, 0.02, 1.0)
 application.base.setBackgroundColor(color_bruma) # El fondo es oscuridad pura
 window.color = color_bruma 
 
-# --- MENÚ DE PAUSA Y MUERTE ---
+# --- MENÚ DE INICIO, PAUSA Y MUERTE ---
+menu_inicio = MenuInicio()
 menu_pausa = MenuPausa()
 pantalla_muerte = PantallaMuerte()
 
@@ -59,6 +61,7 @@ carga_terminada = False
 jugador_principal = None
 coordinador = None
 gestores_arena = []
+power_up_service = None
 
 from ursina import load_texture, Entity, Text, color
 from direct.gui.OnscreenImage import OnscreenImage
@@ -98,30 +101,35 @@ def actualizar_loading(porcentaje, mensaje="Cargando..."):
     application.base.graphicsEngine.renderFrame()
     time.sleep(0.8) # Pausa artificial para que se alcance a ver la imagen y el progreso
 
+def activar_hud_jugador():
+    if jugador_principal:
+        jugador_principal.mira.enabled = True
+        jugador_principal.barra_vida_bg.enabled = True
+        jugador_principal.texto_vida.enabled = True
+        jugador_principal.radar_bg.enabled = True
+        if hasattr(jugador_principal, 'texto_monedas'):
+            jugador_principal.texto_monedas.enabled = True
+        if hasattr(jugador_principal, 'img_ronda_1'):
+            jugador_principal.img_ronda_1.enabled = True
+        if hasattr(jugador_principal, 'img_ronda_2') and jugador_principal.ronda_actual >= 10:
+            jugador_principal.img_ronda_2.enabled = True
+        if hasattr(jugador_principal, 'img_ronda_3') and jugador_principal.ronda_actual >= 100:
+            jugador_principal.img_ronda_3.enabled = True
+        if hasattr(jugador_principal, 'texto_enemigos'):
+            jugador_principal.texto_enemigos.enabled = True
+        if hasattr(jugador_principal, 'hud_armas_bg'):
+            jugador_principal.hud_armas_bg.enabled = True
+
+menu_inicio.on_jugar = activar_hud_jugador
+
 def self_destruct():
     if carga_terminada:
         from ursina import destroy
         if pantalla_carga:
             pantalla_carga.destroy()
         
-        # Activar la interfaz del jugador ahora que terminó la carga
-        if jugador_principal:
-            jugador_principal.mira.enabled = True
-            jugador_principal.barra_vida_bg.enabled = True
-            jugador_principal.texto_vida.enabled = True
-            jugador_principal.radar_bg.enabled = True
-            if hasattr(jugador_principal, 'texto_monedas'):
-                jugador_principal.texto_monedas.enabled = True
-            if hasattr(jugador_principal, 'img_ronda_1'):
-                jugador_principal.img_ronda_1.enabled = True
-            if hasattr(jugador_principal, 'img_ronda_2') and jugador_principal.ronda_actual >= 10:
-                jugador_principal.img_ronda_2.enabled = True
-            if hasattr(jugador_principal, 'img_ronda_3') and jugador_principal.ronda_actual >= 100:
-                jugador_principal.img_ronda_3.enabled = True
-            if hasattr(jugador_principal, 'texto_enemigos'):
-                jugador_principal.texto_enemigos.enabled = True
-            if hasattr(jugador_principal, 'hud_armas_bg'):
-                jugador_principal.hud_armas_bg.enabled = True
+        # Al terminar de cargar la escena de fondo, mostramos el Menú de Inicio
+        menu_inicio.mostrar()
 
 # Usar el sistema de tareas de Panda3D para verificar la destrucción
 def check_destruct(task):
@@ -142,6 +150,9 @@ def iniciar_carga_pesada():
     
     from scripts.powerups import precargar_modelos_powerups
     precargar_modelos_powerups()
+    
+    from scripts.power_up_service import PowerUpService
+    power_up_service = PowerUpService(pool_powerups=['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad'])
     
     jugador_principal = Jugador(position=(0, 10, 0))
     jugador_principal.equipar_arma() # El jugador empieza con la pistola
@@ -250,12 +261,13 @@ def iniciar_carga_pesada():
     carga_terminada = True
 
 def reset_game():
-    global carga_terminada, gestores_arena, menu_pausa, pantalla_muerte, pantalla_carga, imagen_actual
+    global carga_terminada, gestores_arena, menu_inicio, menu_pausa, pantalla_muerte, pantalla_carga, imagen_actual
     from ursina import scene, application, mouse, AmbientLight, DirectionalLight, color
     import random
     from direct.gui.OnscreenImage import OnscreenImage
     from panda3d.core import TransparencyAttrib
     from scripts.menu_pausa import MenuPausa, PantallaMuerte
+    from scripts.menu_inicio import MenuInicio
     
     # 1. Limpiar escena completa (Destruye absolutamente todas las entidades)
     scene.clear()
@@ -271,6 +283,8 @@ def reset_game():
     gestores_arena = []
     
     # 4. Recrear interfaces
+    menu_inicio = MenuInicio()
+    menu_inicio.on_jugar = activar_hud_jugador
     menu_pausa = MenuPausa()
     menu_pausa.on_reiniciar = reset_game
     pantalla_muerte = PantallaMuerte()

@@ -14,7 +14,7 @@ class EnemigoBase(Entity):
                 base_folder + prefix + 'Axe_Breathe_and_Look_Around_withSkin.glb',
                 {
                     'idle': base_folder + prefix + 'Axe_Breathe_and_Look_Around_withSkin.glb',
-                    'walk': base_folder + prefix + 'Walking_withSkin.glb',
+                    'walk': base_folder + prefix + 'Slow_Orc_Walk_withSkin.glb',
                     'run': base_folder + prefix + 'Running_withSkin.glb',
                     'run_fast': base_folder + prefix + 'run_fast_8_withSkin.glb',
                     'attack': base_folder + prefix + 'Left_Hook_from_Guard_withSkin.glb',
@@ -96,8 +96,8 @@ class EnemigoBase(Entity):
         self.ultimo_tiempo_esquiva = 0
         self.direccion_esquiva = 0
         
-        # Optimización: Reducir raycasts
-        self.tiempo_ultimo_raycast = 0
+        # Optimización: Reducir raycasts y desincronizarlos
+        self.tiempo_ultimo_raycast = time.time() - random.uniform(0.0, 0.2)
         self.obstaculo_enfrente = False
 
     def buscar_jugador(self):
@@ -325,7 +325,19 @@ class EnemigoBase(Entity):
         
         print(f"¡Enemigo dañado! Vida restante: {self.vida}")
         if self.vida <= 0:
+            self.procesar_muerte()
             self.curar()
+
+    def procesar_muerte(self):
+        if self.jugador_objetivo and hasattr(self.jugador_objetivo, 'ganar_monedas'):
+            self.jugador_objetivo.ganar_monedas(100)
+            
+        import __main__ as main
+        if hasattr(main, 'power_up_service') and main.power_up_service:
+            drop = main.power_up_service.procesar_muerte_enemigo(100, self.position)
+            if drop:
+                from scripts.powerups import PowerUp
+                PowerUp(tipo=drop['tipo_powerup'], position=drop['posicion'])
 
         # (Este método fue eliminado porque los enemigos ahora se destruyen completamente para ahorrar RAM)
         pass
@@ -333,24 +345,8 @@ class EnemigoBase(Entity):
     def curar(self):
         self.curando = True
         
-        # --- SISTEMA DE DROPS (POWERUPS ZOMBIES) ---
-        import random
-        from scripts.powerups import PowerUp
-        
-        # Probabilidad de soltar un objeto (ej. 60% de soltar algo)
-        if random.random() < 0.60:
-            tipo_drop = random.choices(
-                population=['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad'],
-                weights=[0.15, 0.20, 0.15, 0.10, 0.15, 0.15, 0.10],
-                k=1
-            )[0]
-            # Spawnear el powerup en la posición actual del enemigo
-            PowerUp(tipo=tipo_drop, position=self.position)
-            
         # Detenemos al enemigo
         self.velocidad = 0
-        if self.jugador_objetivo and hasattr(self.jugador_objetivo, 'ganar_monedas'):
-            self.jugador_objetivo.ganar_monedas(100)
         self.jugador_objetivo = None 
         
         # Ocultamos la barra de vida al morir en lugar de destruirla para poder reciclarla

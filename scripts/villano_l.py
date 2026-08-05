@@ -10,7 +10,7 @@ class VillanoL(EnemigoBase):
             **kwargs
         )
         self.vida = 100
-        self.velocidad = 10
+        self.velocidad = 4.8 # 60% de la velocidad del jugador (8)
         self.distancia_ataque = 40 # Francotirador (ataca desde muy lejos)
         self.tiempo_entre_ataques = 2.5 # Dispara cada 2.5 segundos
 

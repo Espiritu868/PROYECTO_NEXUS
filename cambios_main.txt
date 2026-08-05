@@ -1,0 +1,132 @@
+===============================================================================
+PROYECTO NEXO - RESUMEN Y CÓDIGO DE CAMBIOS EN MAIN.PY
+===============================================================================
+Ubicación del archivo original: main.py
+
+RESUMEN DE CAMBIOS REALIZADOS EN MAIN.PY:
+1. Importación e Instanciación de MenuInicio:
+   - Se importó `MenuInicio` desde `scripts.menu_inicio`.
+   - Se creó la instancia global `menu_inicio = MenuInicio()`.
+
+2. Modificación del Flujo de Entrada al Juego (self_destruct):
+   - Anteriormente, al terminar la carga pesada del nivel, el juego activaba
+     el HUD del jugador inmediatamente y entraba directo al combate.
+   - Ahora, se extrajo la activación del HUD a la función `activar_hud_jugador()`.
+   - Se asignó `menu_inicio.on_jugar = activar_hud_jugador`.
+   - Cuando la carga finaliza, `self_destruct()` destruye la pantalla de carga y
+     muestra el `menu_inicio.mostrar()`. El nivel queda listo en segundo plano
+     sin lag.
+
+3. Reinicio de Juego (reset_game):
+   - En la función `reset_game()`, se incluyó la recreación de `menu_inicio`
+     junto con el menú de pausa y la pantalla de muerte para reiniciar la partida
+     limpiamente.
+
+4. Formato y compatibilidad Panda3D:
+   - Se agregaron anotaciones `# type: ignore` en importaciones de Panda3D para
+     evitar advertencias del linter en la terminal.
+
+-------------------------------------------------------------------------------
+GIT DIFF EXACTO DE MAIN.PY:
+-------------------------------------------------------------------------------
+
+diff --git a/main.py b/main.py
+index dc506d0..74c4225 100644
+--- a/main.py
++++ b/main.py
+@@ -1,4 +1,4 @@
+-from panda3d.core import loadPrcFileData
++from panda3d.core import loadPrcFileData # type: ignore
+ loadPrcFileData('', 'max-texture-dimension 2048')
+ 
+ from ursina import Ursina, DirectionalLight, AmbientLight, color, window, application, scene, Entity, Text, camera, invoke, destroy
+@@ -7,8 +7,8 @@ import random
+ # --- PARCHE PARA MODELOS GLB EXTERNOS ---
+ # Al convertir FBX a GLB en internet, a veces dejan rutas absolutas a imágenes que no existen.
+ # Este parche evita que Panda3D crashee y simplemente ignore esas texturas faltantes.
+-import gltf._converter
+-from panda3d.core import Texture
++import gltf._converter # type: ignore
++from panda3d.core import Texture # type: ignore
+ original_load_texture = gltf._converter.Converter.load_texture
+ 
+ def patched_load_texture(self, texid, gltf_tex, gltf_data):
+@@ -29,6 +29,7 @@ from scripts.zombie import Zombie
+ from scripts.gestor_arena import GestorArena
+ from scripts.editor_nivel import EditorNivel
+ from scripts.menu_pausa import MenuPausa, PantallaMuerte
++from scripts.menu_inicio import MenuInicio
+ 
+ app = Ursina(title="Proyecto Nexo - Nivel 0")
+ window.fullscreen = True
+@@ -45,7 +46,8 @@ color_bruma = color.rgba(0.01, 0.01, 0.02, 1.0)
+ application.base.setBackgroundColor(color_bruma) # El fondo es oscuridad pura
+ window.color = color_bruma 
+ 
+-# --- MENÚ DE PAUSA Y MUERTE ---
++# --- MENÚ DE INICIO, PAUSA Y MUERTE ---
++menu_inicio = MenuInicio()
+ menu_pausa = MenuPausa()
+ pantalla_muerte = PantallaMuerte()
+ 
+@@ -98,30 +97,35 @@ def actualizar_loading(porcentaje, mensaje="Cargando..."):
+     application.base.graphicsEngine.renderFrame()
+     time.sleep(0.8) # Pausa artificial para que se alcance a ver la imagen y el progreso
+ 
++def activar_hud_jugador():
++    if jugador_principal:
++        jugador_principal.mira.enabled = True
++        jugador_principal.barra_vida_bg.enabled = True
++        jugador_principal.texto_vida.enabled = True
++        jugador_principal.radar_bg.enabled = True
++        if hasattr(jugador_principal, 'texto_monedas'):
++            jugador_principal.texto_monedas.enabled = True
++        if hasattr(jugador_principal, 'img_ronda_1'):
++            jugador_principal.img_ronda_1.enabled = True
++        if hasattr(jugador_principal, 'img_ronda_2') and jugador_principal.ronda_actual >= 10:
++            jugador_principal.img_ronda_2.enabled = True
++        if hasattr(jugador_principal, 'img_ronda_3') and jugador_principal.ronda_actual >= 100:
++            jugador_principal.img_ronda_3.enabled = True
++        if hasattr(jugador_principal, 'texto_enemigos'):
++            jugador_principal.texto_enemigos.enabled = True
++        if hasattr(jugador_principal, 'hud_armas_bg'):
++            jugador_principal.hud_armas_bg.enabled = True
++
++menu_inicio.on_jugar = activar_hud_jugador
++
+ def self_destruct():
+     if carga_terminada:
+         from ursina import destroy
+         if pantalla_carga:
+             pantalla_carga.destroy()
+         
+-        # Activar la interfaz del jugador ahora que terminó la carga
+-        if jugador_principal:
+-            jugador_principal.mira.enabled = True
+-            jugador_principal.barra_vida_bg.enabled = True
+-            jugador_principal.texto_vida.enabled = True
+-            jugador_principal.radar_bg.enabled = True
+-            if hasattr(jugador_principal, 'texto_monedas'):
+-                jugador_principal.texto_monedas.enabled = True
+-            if hasattr(jugador_principal, 'img_ronda_1'):
+-                jugador_principal.img_ronda_1.enabled = True
+-            if hasattr(jugador_principal, 'img_ronda_2') and jugador_principal.ronda_actual >= 10:
+-                jugador_principal.img_ronda_2.enabled = True
+-            if hasattr(jugador_principal, 'img_ronda_3') and jugador_principal.ronda_actual >= 100:
+-                jugador_principal.img_ronda_3.enabled = True
+-            if hasattr(jugador_principal, 'texto_enemigos'):
+-                jugador_principal.texto_enemigos.enabled = True
+-            if hasattr(jugador_principal, 'hud_armas_bg'):
+-                jugador_principal.hud_armas_bg.enabled = True
++        # Al terminar de cargar la escena de fondo, mostramos el Menú de Inicio
++        menu_inicio.mostrar()
+
+@@ -271,6 +272,8 @@ def reset_game():
+     gestores_arena = []
+     
+     # 4. Recrear interfaces
++    menu_inicio = MenuInicio()
++    menu_inicio.on_jugar = activar_hud_jugador
+     menu_pausa = MenuPausa()
+     menu_pausa.on_reiniciar = reset_game
+     pantalla_muerte = PantallaMuerte()
