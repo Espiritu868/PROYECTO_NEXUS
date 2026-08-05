@@ -58,6 +58,7 @@ scene.fog_color = color_bruma
 
 # --- PANTALLA DE CARGA (LOADING SCREEN) ---
 carga_terminada = False
+mostrar_menu_al_cargar = True
 jugador_principal = None
 coordinador = None
 gestores_arena = []
@@ -123,13 +124,18 @@ def activar_hud_jugador():
 menu_inicio.on_jugar = activar_hud_jugador
 
 def self_destruct():
+    global mostrar_menu_al_cargar
     if carga_terminada:
         from ursina import destroy
         if pantalla_carga:
             pantalla_carga.destroy()
         
-        # Al terminar de cargar la escena de fondo, mostramos el Menú de Inicio
-        menu_inicio.mostrar()
+        if mostrar_menu_al_cargar:
+            # Al terminar de cargar la escena de fondo, mostramos el Menú de Inicio
+            menu_inicio.mostrar()
+        else:
+            # Entramos directamente al juego
+            activar_hud_jugador()
 
 # Usar el sistema de tareas de Panda3D para verificar la destrucción
 def check_destruct(task):
@@ -260,7 +266,7 @@ def iniciar_carga_pesada():
         
     carga_terminada = True
 
-def reset_game():
+def reset_game_core():
     global carga_terminada, gestores_arena, menu_inicio, menu_pausa, pantalla_muerte, pantalla_carga, imagen_actual
     from ursina import scene, application, mouse, AmbientLight, DirectionalLight, color
     import random
@@ -286,9 +292,11 @@ def reset_game():
     menu_inicio = MenuInicio()
     menu_inicio.on_jugar = activar_hud_jugador
     menu_pausa = MenuPausa()
-    menu_pausa.on_reiniciar = reset_game
+    menu_pausa.on_reiniciar = reiniciar_nivel
+    menu_pausa.on_volver_menu = volver_al_menu
     pantalla_muerte = PantallaMuerte()
-    pantalla_muerte.on_reiniciar = reset_game
+    pantalla_muerte.on_reiniciar = reiniciar_nivel
+    pantalla_muerte.on_volver_menu = volver_al_menu
     
     # 5. Recrear pantalla de carga
     imagen_actual = random.choice(lista_imagenes)
@@ -302,8 +310,20 @@ def reset_game():
     # Volver a llamar al generador del mundo
     iniciar_carga_pesada()
 
-menu_pausa.on_reiniciar = reset_game
-pantalla_muerte.on_reiniciar = reset_game
+def reiniciar_nivel():
+    global mostrar_menu_al_cargar
+    mostrar_menu_al_cargar = False
+    reset_game_core()
+
+def volver_al_menu():
+    global mostrar_menu_al_cargar
+    mostrar_menu_al_cargar = True
+    reset_game_core()
+
+menu_pausa.on_reiniciar = reiniciar_nivel
+menu_pausa.on_volver_menu = volver_al_menu
+pantalla_muerte.on_reiniciar = reiniciar_nivel
+pantalla_muerte.on_volver_menu = volver_al_menu
 
 if __name__ == '__main__':
     # Ejecutamos la carga de modelos sincrónicamente, pero usando nuestro renderFrame para el slideshow

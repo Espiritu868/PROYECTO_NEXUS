@@ -148,7 +148,7 @@ class MenuPausa(Entity):
 
         self.boton_salir = Button(
             parent=self.contenido,
-            text='Salir del juego',
+            text='Volver al Menú Principal',
             y=-0.22,
             scale=(0.32, 0.085),
             color=color.rgba(110/255, 28/255, 28/255, 1),
@@ -157,7 +157,7 @@ class MenuPausa(Entity):
             text_color=color.white,
             ignore_paused=True
         )
-        self.boton_salir.on_click = self.salir
+        self.boton_salir.on_click = self.volver_menu
 
         self.pie = Text(
             parent=self.contenido,
@@ -229,8 +229,9 @@ class MenuPausa(Entity):
             if hasattr(self.jugador, 'texto_monedas'):
                 self.jugador.texto_monedas.enabled = True
 
-    def salir(self):
-        application.quit()
+    def volver_menu(self):
+        if hasattr(self, 'on_volver_menu') and self.on_volver_menu:
+            self.on_volver_menu()
         
     def reiniciar(self):
         if hasattr(self, 'on_reiniciar') and self.on_reiniciar:
@@ -284,7 +285,7 @@ class PantallaMuerte(Entity):
 
         self.boton_salir = Button(
             parent=self,
-            text='Salir al Escritorio',
+            text='Volver al Menú Principal',
             y=-0.22,
             scale=(0.4, 0.1),
             color=color.rgba(110/255, 28/255, 28/255, 1),
@@ -293,7 +294,7 @@ class PantallaMuerte(Entity):
             text_color=color.white,
             ignore_paused=True
         )
-        self.boton_salir.on_click = application.quit
+        self.boton_salir.on_click = self.volver_menu
         
         self.jugador = None
 
@@ -326,3 +327,7 @@ class PantallaMuerte(Entity):
     def reiniciar(self):
         if hasattr(self, 'on_reiniciar') and self.on_reiniciar:
             self.on_reiniciar()
+            
+    def volver_menu(self):
+        if hasattr(self, 'on_volver_menu') and self.on_volver_menu:
+            self.on_volver_menu()

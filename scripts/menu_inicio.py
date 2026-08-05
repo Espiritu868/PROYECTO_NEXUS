@@ -1,10 +1,10 @@
-﻿"""
-MenÃº de Inicio y Tutorial con Carrusel de ImÃ¡genes.
+"""
+Menú de Inicio y Tutorial con Carrusel de Imágenes.
 
-- MenuInicio: Pantalla principal tÃ¡ctica con tÃ­tulo, subtÃ­tulo, velo oscuro de fondo
+- MenuInicio: Pantalla principal táctica con título, subtítulo, velo oscuro de fondo
   y botones [JUGAR], [TUTORIAL], [SALIR].
-- CarruselTutorial: Modal interactivo con carrusel de diapositivas (imagen, tÃ­tulo,
-  descripciÃ³n, navegaciÃ³n anterior/siguiente, puntos indicadores y botÃ³n de volver).
+- CarruselTutorial: Modal interactivo con carrusel de diapositivas (imagen, título,
+  descripción, navegación anterior/siguiente, puntos indicadores y botón de volver).
 """
 
 from ursina import Entity, Button, Text, color, application, mouse, camera, window, curve, time
@@ -23,29 +23,29 @@ DIAPOSITIVAS_TUTORIAL = [
         "titulo": "CONTROLES Y MOVIMIENTO",
         "imagen": "textures/tutorial_controls.jpg",
         "descripcion": (
-            "â€¢ WASD: Mover al agente | MOUSE: Apuntar y Mirar alrededor\n"
-            "â€¢ CLIC IZQ: Disparar arma | CLIC DER: Apuntar con precisiÃ³n\n"
-            "â€¢ SHIFT: Esprintar | ESPACIO: Saltar | R: Recargar | E: Interactuar\n"
-            "â€¢ 1, 2, 3: Cambiar Armas | TAB: Abrir Tienda de Armas MÃ³vil"
+            "• WASD: Mover al agente | MOUSE: Apuntar y Mirar alrededor\n"
+            "• CLIC IZQ: Disparar arma | CLIC DER: Apuntar con precisión\n"
+            "• SHIFT: Esprintar | ESPACIO: Saltar | R: Recargar | E: Interactuar\n"
+            "• 1, 2, 3: Cambiar Armas | TAB: Abrir Tienda de Armas Móvil"
         )
     },
     {
         "titulo": "BEBIDAS Y POTENCIADORES (PERKS)",
         "imagen": "textures/tutorial_perks.jpg",
         "descripcion": (
-            "â€¢ Encuentra las mÃ¡quinas expendedoras en la arena para comprar Perks.\n"
-            "â€¢ Juggernog: Aumenta la vida mÃ¡xima del jugador.\n"
-            "â€¢ Speed Cola: Recarga de municiÃ³n sÃºper rÃ¡pida.\n"
-            "â€¢ Stamin-Up: Incrementa la velocidad de movimiento al esprintar."
+            "• Encuentra las máquinas expendedoras en la arena para comprar Perks.\n"
+            "• Juggernog: Aumenta la vida máxima del jugador.\n"
+            "• Speed Cola: Recarga de munición súper rápida.\n"
+            "• Stamin-Up: Incrementa la velocidad de movimiento al esprintar."
         )
     },
     {
         "titulo": "ENEMIGOS, JEFES Y RONDAS",
         "imagen": "textures/tutorial_enemies.jpg",
         "descripcion": (
-            "â€¢ Sobrevive a hordas infinitas de Zombis, Brujas y Caballeros.\n"
-            "â€¢ En la ronda del GOLEM BOSS, prepÃ¡rate para un combate masivo pesadamente blindado.\n"
-            "â€¢ Sella las grietas oscuras e interactÃºa con los portales para avanzar de arena."
+            "• Sobrevive a hordas infinitas de Zombis, Brujas y Caballeros.\n"
+            "• En la ronda del GOLEM BOSS, prepárate para un combate masivo pesadamente blindado.\n"
+            "• Sella las grietas oscuras e interactúa con los portales para avanzar de arena."
         )
     }
 ]
@@ -77,7 +77,7 @@ class CarruselTutorial(Entity):
             ignore_paused=True
         )
 
-        # Marcos tÃ¡cticos de las esquinas
+        # Marcos tácticos de las esquinas
         hw, hh = 0.55, 0.425
         largo, grosor = 0.06, 0.004
         for sx, sy in [(-1, 1), (1, 1), (-1, -1), (1, -1)]:
@@ -94,10 +94,10 @@ class CarruselTutorial(Entity):
                 ignore_paused=True
             )
 
-        # TÃ­tulo del Tutorial
+        # Título del Tutorial
         self.titulo_modal = Text(
             parent=self,
-            text='GUÃA DE SUPERVIVENCIA - TUTORIAL',
+            text='GUÍA DE SUPERVIVENCIA - TUTORIAL',
             origin=(0, 0),
             y=0.36,
             scale=1.8,
@@ -126,7 +126,7 @@ class CarruselTutorial(Entity):
             ignore_paused=True
         )
 
-        # TÃ­tulo de la diapositiva actual
+        # Título de la diapositiva actual
         self.titulo_slide = Text(
             parent=self,
             text=DIAPOSITIVAS_TUTORIAL[0]["titulo"],
@@ -137,7 +137,7 @@ class CarruselTutorial(Entity):
             ignore_paused=True
         )
 
-        # DescripciÃ³n de la diapositiva actual
+        # Descripción de la diapositiva actual
         self.desc_slide = Text(
             parent=self,
             text=DIAPOSITIVAS_TUTORIAL[0]["descripcion"],
@@ -148,7 +148,7 @@ class CarruselTutorial(Entity):
             ignore_paused=True
         )
 
-        # Botones de navegaciÃ³n
+        # Botones de navegación
         self.btn_anterior = Button(
             parent=self,
             text='< ANTERIOR',
@@ -177,7 +177,7 @@ class CarruselTutorial(Entity):
         )
         self.btn_siguiente.on_click = self.siguiente_slide
 
-        # Indicador de pÃ¡gina
+        # Indicador de página
         self.txt_indicador = Text(
             parent=self,
             text='1 / 3',
@@ -205,10 +205,10 @@ class CarruselTutorial(Entity):
             )
             self.puntos_entidades.append(pt)
 
-        # BotÃ³n Volver al MenÃº
+        # Botón Volver al Menú
         self.btn_volver = Button(
             parent=self,
-            text='[ X ] VOLVER AL MENÃš',
+            text='[ X ] VOLVER AL MENÚ',
             scale=(0.28, 0.065),
             y=-0.38,
             color=COLOR_ACENTO,
@@ -258,7 +258,7 @@ class MenuInicio(Entity):
 
         self.on_jugar = None
 
-        # Velo oscuro tÃ¡ctico de fondo
+        # Velo oscuro táctico de fondo
         self.velo = Entity(
             parent=self,
             model='quad',
@@ -278,7 +278,7 @@ class MenuInicio(Entity):
             ignore_paused=True
         )
 
-        # Brackets tÃ¡cticos de esquina
+        # Brackets tácticos de esquina
         hw, hh = 0.325, 0.36
         largo, grosor = 0.06, 0.004
         for sx, sy in [(-1, 1), (1, 1), (-1, -1), (1, -1)]:
@@ -295,7 +295,7 @@ class MenuInicio(Entity):
                 ignore_paused=True
             )
 
-        # TÃ­tulo Principal
+        # Título Principal
         self.titulo_sombra = Text(
             parent=self,
             text='PROYECTO NEXO',
@@ -334,7 +334,7 @@ class MenuInicio(Entity):
             ignore_paused=True
         )
 
-        # BotÃ³n JUGAR
+        # Botón JUGAR
         self.btn_jugar = Button(
             parent=self,
             text='[ > ]  JUGAR',
@@ -348,7 +348,7 @@ class MenuInicio(Entity):
         )
         self.btn_jugar.on_click = self.iniciar_juego
 
-        # BotÃ³n TUTORIAL
+        # Botón TUTORIAL
         self.btn_tutorial = Button(
             parent=self,
             text='[ ? ]  TUTORIAL / GUIA',
@@ -362,7 +362,7 @@ class MenuInicio(Entity):
         )
         self.btn_tutorial.on_click = self.abrir_tutorial
 
-        # BotÃ³n SALIR
+        # Botón SALIR
         self.btn_salir = Button(
             parent=self,
             text='[ X ]  SALIR DEL JUEGO',
@@ -381,7 +381,7 @@ class MenuInicio(Entity):
 
     def update(self):
         if self.enabled:
-            # PulsaciÃ³n sutil en el tÃ­tulo
+            # Pulsación sutil en el título
             escala = 3.2 + math.sin(time.time() * 2.5) * 0.04
             self.titulo.scale = escala
             self.titulo_sombra.scale = escala
