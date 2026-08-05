@@ -21,6 +21,9 @@ class GestorArena(Entity):
         self.spawns_pendientes = 0
         self.tiempo_ultimo_spawn = 0
         
+        # --- POOL OPTIMIZADO O(1) ---
+        self.enemigos_reciclables = []
+        
         # --- PRE-LOAD POOL DE ENEMIGOS (Evita congelamiento mid-game) ---
         # Instanciamos 15 enemigos por arena durante la pantalla de carga para evitar lag
         import random
@@ -32,6 +35,7 @@ class GestorArena(Entity):
             tipo_enemigo = random.choice([VillanoL, VillanoO, Zombie])
             # Se spawnean bajo tierra muy profundo para activar el culling espacial (>1000)
             enemigo = tipo_enemigo(position=(0, -2000, 0), rotation_y=0)
+            enemigo.gestor_padre = self
             enemigo.listo_para_reciclar = True
             enemigo.vida = 0
             enemigo.enabled = False # Desactiva el enemigo
@@ -40,6 +44,7 @@ class GestorArena(Entity):
             else:
                 enemigo.modelo_visual.enabled = False
             self.enemigos.append(enemigo)
+            self.enemigos_reciclables.append(enemigo)
 
     def buscar_jugador(self):
         from scripts.jugador import Jugador
@@ -69,6 +74,7 @@ class GestorArena(Entity):
                 # El jefe suele aparecer más al fondo (offset z = +40 o +60)
                 offset_z_jefe = 60 if self.indice_arena == 3 else 40
                 jefe = self.jefe_class(position=(self.centro_x, 0, self.centro_z + offset_z_jefe))
+                jefe.gestor_padre = self
                 self.enemigos.append(jefe)
                 
             # 2. Activamos el contador para los enemigos normales
@@ -86,14 +92,14 @@ class GestorArena(Entity):
         else:
             progreso_ronda = 1.0
             
-        # Máximo de vivos permitidos (aumenta dinámicamente hasta 15)
+        # Máximo de vivos permitidos (aumenta dinámicamente hasta 24)
         # La cantidad base dependerá del índice de la arena.
         base_vivos = 4 + (self.indice_arena * 2) 
         # Crecimiento agresivo basado en el progreso
-        max_vivos_ronda = min(15, base_vivos + int(progreso_ronda * 11)) 
+        max_vivos_ronda = min(24, base_vivos + int(progreso_ronda * 15)) 
         
         if getattr(self, 'max_rondas', 3) == float('inf'):
-            max_vivos = 15 # Survival mode post-boss
+            max_vivos = 24 # Survival mode post-boss
         else:
             max_vivos = max_vivos_ronda
         
@@ -107,9 +113,13 @@ class GestorArena(Entity):
             if time.time() - self.tiempo_inicio_ronda < 5.0:
                 return
                 
-            # Delay progresivo (empieza lento, se acelera hacia el final de la ronda)
-            delay_base = 3.5 - self.indice_arena # Arena 0: 3.5s, Arena 1: 2.5s, Arena 2: 1.5s
-            delay_spawn = max(0.5, delay_base * (1.0 - progreso_ronda))
+            # Si acaba de iniciar la ronda, los enemigos salen cada 1 segundo para no matar los FPS.
+            # Cuando ya está avanzada, salen cada 0.1s para mantener la presión de 24.
+            tiempo_desde_inicio = time.time() - self.tiempo_inicio_ronda
+            if tiempo_desde_inicio < 15.0: # Primeros 15 segundos de la ronda
+                delay_spawn = 1.0
+            else:
+                delay_spawn = 0.1
             
             if time.time() - getattr(self, 'tiempo_ultimo_spawn', 0) < delay_spawn:
                 return
@@ -172,28 +182,34 @@ class GestorArena(Entity):
             rotacion_aleatoria = random.randint(0, 360)
 
             ronda_actual = getattr(self, 'ronda_actual', 1)
-            # Intentar reciclar un enemigo existente antes de crear uno nuevo para evitar lag
-            reciclados = [e for e in self.enemigos if getattr(e, 'listo_para_reciclar', False)]
             
-            # Restringir la aparición de Zombies locos antes de la ronda 3
-            if ronda_actual < 3:
-                reciclados = [e for e in reciclados if type(e).__name__ != 'Zombie']
+            # O(1) POOL: Intentar reciclar un enemigo existente sacándolo de la lista
+            enemigo_a_reciclar = None
+            if self.enemigos_reciclables:
+                # Restringir la aparición de Zombies locos antes de la ronda 3
+                if ronda_actual < 3:
+                    for idx, e in enumerate(self.enemigos_reciclables):
+                        if type(e).__name__ != 'Zombie':
+                            enemigo_a_reciclar = self.enemigos_reciclables.pop(idx)
+                            break
+                else:
+                    enemigo_a_reciclar = self.enemigos_reciclables.pop()
                 
-            if reciclados:
-                enemigo = random.choice(reciclados)
+            if enemigo_a_reciclar:
+                enemigo = enemigo_a_reciclar
                 enemigo.listo_para_reciclar = False
                 enemigo.vida = enemigo.vida_maxima if enemigo.vida_maxima else 100
                 enemigo.position = posicion_aleatoria
                 enemigo.rotation_y = rotacion_aleatoria
                 enemigo.curando = False
                 if type(enemigo).__name__ == 'VillanoL':
-                    enemigo.velocidad = 4.8
+                    enemigo.velocidad = 5.8
                 elif type(enemigo).__name__ == 'VillanoO':
-                    enemigo.velocidad_normal = 2.5
-                    enemigo.velocidad = 2.5
+                    enemigo.velocidad_normal = 3.5
+                    enemigo.velocidad = 3.5
                 elif type(enemigo).__name__ == 'Zombie':
-                    enemigo.velocidad_normal = 7.6
-                    enemigo.velocidad = 7.6
+                    enemigo.velocidad_normal = 9.0
+                    enemigo.velocidad = 9.0
                     enemigo.frenesi = False
                 
                 from ursina import time
@@ -220,6 +236,7 @@ class GestorArena(Entity):
                     
                 tipo_enemigo = random.choice(opciones)
                 enemigo = tipo_enemigo(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
+                enemigo.gestor_padre = self
                 self.enemigos.append(enemigo)
 
             

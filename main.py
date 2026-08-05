@@ -1,5 +1,6 @@
 from panda3d.core import loadPrcFileData # type: ignore
 loadPrcFileData('', 'max-texture-dimension 2048')
+loadPrcFileData('', 'hardware-animated-vertices #t')
 
 from ursina import Ursina, DirectionalLight, AmbientLight, color, window, application, scene, Entity, Text, camera, invoke, destroy
 import random
@@ -158,6 +159,7 @@ def iniciar_carga_pesada():
     precargar_modelos_powerups()
     
     from scripts.power_up_service import PowerUpService
+    global power_up_service
     power_up_service = PowerUpService(pool_powerups=['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad'])
     
     jugador_principal = Jugador(position=(0, 10, 0))

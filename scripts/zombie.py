@@ -10,7 +10,7 @@ class Zombie(EnemigoBase):
             **kwargs
         )
         self.vida = 80
-        self.velocidad_normal = 7.6 # 95% de la velocidad del jugador (8)
+        self.velocidad_normal = 9.0 # Aumentada (antes 7.6)
         self.velocidad = self.velocidad_normal
         self.frenesi = False
 

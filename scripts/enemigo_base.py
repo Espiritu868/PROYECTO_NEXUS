@@ -26,6 +26,7 @@ class EnemigoBase(Entity):
             self.actor.reparentTo(self)
             self.actor.setScale(1.5) # Escala base al tamaño del jugador
             self.actor.setH(180) # Rotar 180 grados igual que el modelo antiguo
+            self.actor.setShaderAuto() # Fuerza el Shader de Panda3D para permitir Hardware Skinning
             
             # --- OPTIMIZACIÓN: Pre-cargar animaciones ---
             try:
@@ -157,125 +158,131 @@ class EnemigoBase(Entity):
                 # Un empuje de 4 m/s que escala con el framerate
                 self.position += vector_empuje.normalized() * 4.0 * time.dt
                 
-        en_movimiento = False
+        # --- AI THROTTLING (Desacelerador Cerebral) ---
+        if not hasattr(self, 'tiempo_ia'):
+            self.tiempo_ia = random.uniform(0.0, 0.1)
+            self.debe_moverse = False
+            
+        self.tiempo_ia += time.dt
         
-        # --- LÓGICA DE IA ---
-        # El enemigo SIEMPRE sabe dónde estás y te busca activamente
-        if True:
-            # 1. FIX: Evitar que el enemigo de vueltas locas si el jugador le salta encima
-            dx = self.jugador_objetivo.x - self.x
-            dz = self.jugador_objetivo.z - self.z
+        # --- LÓGICA DE IA (Se ejecuta a 10 FPS para ahorrar 83% de CPU) ---
+        if self.tiempo_ia >= 0.1:
+            self.tiempo_ia = 0
+            
+            # OPTIMIZACIÓN: Usar posicion_rastreo (breadcrumb)
+            posicion_objetivo = getattr(self.jugador_objetivo, 'posicion_rastreo', self.jugador_objetivo.position)
+            
+            dx_rastreo = posicion_objetivo.x - self.x
+            dz_rastreo = posicion_objetivo.z - self.z
+            
+            # Si está suficientemente cerca del jugador real O cerca de alcanzar el rastro, rastrear directamente al jugador
+            if dist_jugador < 8.0 or (dx_rastreo*dx_rastreo + dz_rastreo*dz_rastreo) < 9.0:
+                posicion_objetivo = self.jugador_objetivo.position
+                
+            # --- INTELIGENCIA DE NAVEGACIÓN ENTRE ARENAS ---
+            if hasattr(self, 'gestor_padre') and self.gestor_padre:
+                cx = self.gestor_padre.centro_x
+                cz = self.gestor_padre.centro_z
+                
+                # Si el jugador (objetivo) está fuera de nuestra arena actual (eje Z)
+                if abs(posicion_objetivo.z - cz) > 90:
+                    # Y el zombi no está dentro de la zona de pasillo central (X +- 45)
+                    if abs(self.x - cx) > 40:
+                        from ursina import Vec3
+                        # En lugar de caminar hacia la pared, camina directo al pasillo central primero
+                        posicion_objetivo = Vec3(cx, self.y, self.z + (20 if posicion_objetivo.z > cz else -20))
+                
+            dx = posicion_objetivo.x - self.x
+            dz = posicion_objetivo.z - self.z
             dist_2d_sq = dx*dx + dz*dz
             
-            if dist_2d_sq > 1.0: # 1 metro cuadrado = 1 metro de radio
+            if dist_2d_sq > 0.1: # Tolerancia para evitar temblores
                 # Mirar al jugador en 2D (solo rotación Y)
-                self.look_at_2d(self.jugador_objetivo.position, 'y')
+                self.look_at_2d(posicion_objetivo, 'y')
             
             # Comportamiento dependiendo de la distancia
-            # Si el jugador está muy lejos en 3D, pero justo encima en 2D, NO avanzamos (evita sobrepasar y dar giros violentos)
-            if dist_jugador > self.distancia_ataque and dist_2d_sq > 1.0:
-                # 1. Caminar hacia el jugador
-                
-                # MICRO-PAUSA POST ATAQUE: Si acaba de atacar, se queda quieto 1 segundo
+            if dist_jugador > self.distancia_ataque:
+                # Caminar hacia el jugador
                 if time.time() - self.ultimo_ataque > 1.0:
-                    
-                    en_movimiento = True
-                    
-                    # --- CACHÉ DE RAYCAST (Throttling a 5 FPS para físicas) ---
-                    # Revisamos el obstáculo frontal solo cada 0.2s, pero comprobando a una distancia mayor
-                    entidades_ignoradas = [self, self.jugador_objetivo]
-                    if hasattr(self.jugador_objetivo, 'modelo_visual'): entidades_ignoradas.append(self.jugador_objetivo.modelo_visual)
-                    if hasattr(self.jugador_objetivo, 'pivot_camara'): entidades_ignoradas.append(self.jugador_objetivo.pivot_camara)
-                    
-                    if time.time() - getattr(self, 'tiempo_ultimo_raycast', 0) > 0.2:
-                        self.tiempo_ultimo_raycast = time.time()
-                        
-                        distancia_proyectada = (self.velocidad * 0.2) + 1.0
-                        
-                        hit_avance = raycast(self.position + Vec3(0, 0.5, 0), direction=self.forward, distance=distancia_proyectada, ignore=tuple(entidades_ignoradas))
-                        
-                        if not hit_avance.hit or hasattr(hit_avance.entity, 'jugador_objetivo'):
-                            self.obstaculo_enfrente = False
-                            self.normal_pared = None
-                        else:
-                            self.obstaculo_enfrente = True
-                            self.normal_pared = hit_avance.world_normal
-                            # DEBUG: Print what the enemy is hitting
-                            if hasattr(hit_avance.entity, 'name'):
-                                print(f"DEBUG: Enemigo detectó obstáculo: {hit_avance.entity.name} (Tipo: {type(hit_avance.entity)})")
-                            else:
-                                print(f"DEBUG: Enemigo detectó obstáculo: {hit_avance.entity} (Tipo: {type(hit_avance.entity)})")
-                            
-                    # --- DESPLAZAMIENTO FLUIDO ---
-                    if not self.obstaculo_enfrente:
-                        # Camino libre
-                        self.position += self.forward * self.velocidad * time.dt
-                    else:
-                        # --- SISTEMA DE SLIDING (Deslizamiento Matemático) ---
-                        vector_mov = self.forward
-                        
-                        if getattr(self, 'normal_pared', None):
-                            # Eliminamos del vector de movimiento la parte que empuja contra la pared
-                            dot_product = vector_mov.dot(self.normal_pared)
-                            vector_deslizamiento = vector_mov - (self.normal_pared * dot_product)
-                            
-                            if vector_deslizamiento.length() > 0:
-                                vector_deslizamiento = vector_deslizamiento.normalized()
-                                # Raycast rápido para confirmar que la ruta de deslizamiento está libre
-                                hit_deslizamiento = raycast(self.position + Vec3(0, 0.5, 0), direction=vector_deslizamiento, distance=(self.velocidad * time.dt) + 0.5, ignore=tuple(entidades_ignoradas))
-                                
-                                if not hit_deslizamiento.hit or hasattr(hit_deslizamiento.entity, 'jugador_objetivo'):
-                                    self.position += vector_deslizamiento * self.velocidad * time.dt
-                                else:
-                                    en_movimiento = False
-                        else:
-                            en_movimiento = False
-
-                        # Ocasionalmente intentar saltar obstáculos bajos si está atascado
-                        if not en_movimiento and self.en_suelo and random.random() < 0.1:
-                            self.velocidad_y = self.velocidad_salto
-                            self.en_suelo = False
-
-                        # IA: ESQUIVA ALEATORIA (DASH LATERAL)
-                        if not hasattr(self, 'ultimo_tiempo_esquiva'):
-                            self.ultimo_tiempo_esquiva = 0
-                            self.direccion_esquiva = 0
-                            
-                        if time.time() - self.ultimo_tiempo_esquiva > 3.0:
-                            self.ultimo_tiempo_esquiva = time.time()
-                            if random.random() < 0.3:
-                                self.direccion_esquiva = random.choice([-1, 1])
-                            else:
-                                self.direccion_esquiva = 0
-                                
-                        if time.time() - self.ultimo_tiempo_esquiva < 0.5 and self.direccion_esquiva != 0:
-                            direccion_esq = self.right * self.direccion_esquiva
-                            dist_esq = (self.velocidad * 2.5) * time.dt
-                            hit_esq = raycast(self.position + Vec3(0, 0.5, 0), direction=direccion_esq, distance=dist_esq + 1.0, ignore=tuple(entidades_ignoradas))
-                            if not hit_esq.hit or hasattr(hit_esq.entity, 'jugador_objetivo'):
-                                self.position += direccion_esq * dist_esq
+                    self.debe_moverse = True
+                else:
+                    self.debe_moverse = False
             else:
-                # 2. Atacar al jugador
+                self.debe_moverse = False
                 self.atacar()
                 
-        # --- ANIMACIONES PROCEDIMENTALES ---
-        if self.actor:
-            if time.time() - self.ultimo_ataque < 1.0:
-                # Mantener animación de ataque
-                pass
-            elif self.en_suelo:
-                if en_movimiento:
-                    # Dependiendo de la velocidad, elige caminar o correr
-                    if self.velocidad > 15:
-                        self.cambiar_animacion('run_fast')
-                    elif self.velocidad > 6:
-                        self.cambiar_animacion('run')
+            # --- ANIMACIONES PROCEDIMENTALES ---
+            if self.actor:
+                if time.time() - self.ultimo_ataque < 1.0:
+                    # Mantener animación de ataque
+                    pass
+                elif self.en_suelo:
+                    if self.debe_moverse:
+                        # Dependiendo de la velocidad, elige caminar o correr
+                        if self.velocidad > 15:
+                            self.cambiar_animacion('run_fast')
+                        elif self.velocidad > 6:
+                            self.cambiar_animacion('run')
+                        else:
+                            self.cambiar_animacion('walk')
                     else:
-                        self.cambiar_animacion('walk')
+                        self.cambiar_animacion('idle')
                 else:
-                    self.cambiar_animacion('idle')
-            else:
-                self.cambiar_animacion('idle') # O alguna pose de salto si hubiera
+                    self.cambiar_animacion('idle') # O alguna pose de salto si hubiera
+                    
+        # --- MOVIMIENTO Y FÍSICAS FLUIDAS (Se ejecuta a 60 FPS) ---
+        if getattr(self, 'debe_moverse', False):
+            # --- DESPLAZAMIENTO FLUIDO ---
+            self.position += self.forward * self.velocidad * time.dt
+            
+            # --- REPELENCIA MATEMÁTICA O(1) DE PAREDES (CERO RAYCASTS) ---
+            if hasattr(self, 'gestor_padre') and self.gestor_padre:
+                cx = self.gestor_padre.centro_x
+                cz = self.gestor_padre.centro_z
+                rel_x = self.x - cx
+                rel_z = self.z - cz
+                margen = 2.0 # Hitbox del zombi + margen seguro para evitar clip
+                
+                # Evaluamos zonas
+                if abs(rel_x) <= 50 - margen:
+                    # Zona del pasillo central (puede cruzar los límites Z de la arena)
+                    pass
+                else:
+                    # No está en el pasillo, choca con las paredes frontales y traseras de la arena (+/- 100)
+                    if rel_z > 100 - margen: self.z = cz + 100 - margen
+                    if rel_z < -100 + margen: self.z = cz - 100 + margen
+                    
+                    # Choca con los límites laterales de la arena (+/- 100)
+                    if rel_x > 100 - margen: self.x = cx + 100 - margen
+                    if rel_x < -100 + margen: self.x = cx - 100 + margen
+                    
+                    # Choca con la pared divisoria horizontal central (z = 0)
+                    if abs(rel_z) < margen:
+                        if rel_z > 0: self.z = cz + margen
+                        else: self.z = cz - margen
+                        
+                # Si está cruzando por la zona de Z > 100 o Z < -100 (dentro del pasillo de transición)
+                # Topará con las paredes laterales del pasillo
+                if abs(rel_z) > 100 - margen:
+                    if rel_x > 50 - margen: self.x = cx + 50 - margen
+                    if rel_x < -50 + margen: self.x = cx - 50 + margen
+                    
+                # --- REPULSIÓN ENTRE ZOMBIS (Evita que se fusionen en uno solo) ---
+                for otro in self.gestor_padre.enemigos:
+                    if otro is not self and otro.enabled and getattr(otro, 'vida', 0) > 0:
+                        dx_e = self.x - otro.x
+                        dz_e = self.z - otro.z
+                        dist_sq = dx_e*dx_e + dz_e*dz_e
+                        if dist_sq < 2.25: # 1.5 metros al cuadrado
+                            if dist_sq == 0.0:
+                                self.x += random.uniform(-0.1, 0.1)
+                                self.z += random.uniform(-0.1, 0.1)
+                            else:
+                                dist_e = math.sqrt(dist_sq)
+                                fuerza = (1.5 - dist_e) / 1.5
+                                self.x += (dx_e / dist_e) * fuerza * 1.5 * time.dt
+                                self.z += (dz_e / dist_e) * fuerza * 1.5 * time.dt
+                                
         else:
             # Fallback para sistema viejo
             pass
@@ -368,6 +375,12 @@ class EnemigoBase(Entity):
             self.enabled = False # Desactiva físicas, update y renderizado
             if self.actor: self.actor.hide()
             else: self.modelo_visual.enabled = False
+            
+            # Reintegrar a la pool O(1) del gestor_padre
+            if hasattr(self, 'gestor_padre') and self.gestor_padre:
+                if self not in self.gestor_padre.enemigos_reciclables:
+                    self.gestor_padre.enemigos_reciclables.append(self)
+                    
         invoke(hacer_reciclable, delay=1.5)
 
 

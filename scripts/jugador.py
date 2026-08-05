@@ -55,9 +55,14 @@ class CampoFuerzaProtector(Entity):
         
     def update(self):
         import __main__ as main
+        from ursina import time
         radio_actual = self.scale_x / 2.0 # El radio va creciendo junto con la escala
-        if hasattr(main, 'gestores_arena'):
-            for gestor in main.gestores_arena:
+        
+        # OPTIMIZACIÓN: Solo revisar a los enemigos de la arena en la que está el jugador
+        if hasattr(main, 'coordinador') and main.coordinador:
+            indice_jugador = int(round(self.jugador.z / main.coordinador.offset_z))
+            if hasattr(main, 'gestores_arena') and 0 <= indice_jugador < len(main.gestores_arena):
+                gestor = main.gestores_arena[indice_jugador]
                 for enemigo in gestor.enemigos:
                     if enemigo.enabled and hasattr(enemigo, 'vida') and enemigo.vida > 0:
                         dir_vector = enemigo.world_position - self.jugador.world_position
@@ -888,6 +893,15 @@ class Jugador(Entity):
 
         if self.esta_muerto:
             return
+            
+        # --- SISTEMA DE RASTREO (BREADCRUMBING PARA IA) ---
+        from ursina import distance
+        if not hasattr(self, 'posicion_rastreo'):
+            self.posicion_rastreo = self.position
+        
+        # Solo actualizamos la posición objetivo para la horda si nos movemos más de 2 metros
+        if distance(self.position, self.posicion_rastreo) > 2.0:
+            self.posicion_rastreo = self.position
             
         # --- DISPARO AUTOMÁTICO ---
         if held_keys['left mouse']:
