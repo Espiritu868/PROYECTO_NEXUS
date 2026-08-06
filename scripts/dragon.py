@@ -51,7 +51,7 @@ class BolaFuego(Entity):
         destroy(self)
 
 class DragonBoss(Entity):
-    def __init__(self, position=(0,0,0), **kwargs):
+    def __init__(self, position=(0,0,0), vida_maxima_override=None, **kwargs):
         super().__init__(position=position, **kwargs)
         
         self.y_suelo = position[1]
@@ -90,7 +90,7 @@ class DragonBoss(Entity):
             self.modelo_visual.color = color.black
             self.estado_animacion = 'error'
 
-        self.vida_maxima = 1000
+        self.vida_maxima = vida_maxima_override if vida_maxima_override else 2000
         self.vida = self.vida_maxima
         self.fase = 1 # Fase 1: Suelo, Fase 2: Cielo
         
@@ -159,6 +159,12 @@ class DragonBoss(Entity):
     def morir(self):
         self.cambiar_animacion('dead')
         self.barra_vida_fg.color = color.black
+        
+        # --- DROP POWERUP ---
+        from scripts.powerups import PowerUp
+        import random
+        tipos = ['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad']
+        PowerUp(random.choice(tipos), position=Vec3(self.position.x, self.y_suelo, self.position.z))
         
         # Si estaba volando, cae en picada
         if self.y > self.y_suelo + 1:

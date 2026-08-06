@@ -92,16 +92,8 @@ class GestorArena(Entity):
         else:
             progreso_ronda = 1.0
             
-        # Máximo de vivos permitidos (aumenta dinámicamente hasta 24)
-        # La cantidad base dependerá del índice de la arena.
-        base_vivos = 4 + (self.indice_arena * 2) 
-        # Crecimiento agresivo basado en el progreso
-        max_vivos_ronda = min(24, base_vivos + int(progreso_ronda * 15)) 
-        
-        if getattr(self, 'max_rondas', 3) == float('inf'):
-            max_vivos = 24 # Survival mode post-boss
-        else:
-            max_vivos = max_vivos_ronda
+        # Límite estricto de BO2: Máximo 24 zombies vivos en el mapa
+        max_vivos = 24
         
         # Si faltan por spawnear y hay menos del límite de vivos en la arena
         if self.jugador_dentro and not getattr(self, 'modo_survival_activo', False) and self.spawns_pendientes > 0 and len(vivos) < max_vivos:
@@ -113,13 +105,15 @@ class GestorArena(Entity):
             if time.time() - self.tiempo_inicio_ronda < 5.0:
                 return
                 
-            # Si acaba de iniciar la ronda, los enemigos salen cada 1 segundo para no matar los FPS.
-            # Cuando ya está avanzada, salen cada 0.1s para mantener la presión de 24.
-            tiempo_desde_inicio = time.time() - self.tiempo_inicio_ronda
-            if tiempo_desde_inicio < 15.0: # Primeros 15 segundos de la ronda
-                delay_spawn = 1.0
+            # Spawn Delay basado en Rondas (Estilo Black Ops 2)
+            ronda = getattr(self, 'ronda_actual', 1)
+            if ronda <= 15:
+                delay_spawn = 3.0 # Entre 2 y 4 segundos
+            elif ronda < 64:
+                # Se reduce drásticamente (ej. 1s en ronda 20, 0.2s en ronda 50)
+                delay_spawn = max(0.1, 2.0 - ((ronda - 15) * 0.05))
             else:
-                delay_spawn = 0.1
+                delay_spawn = 0.0 # Ronda 64+: Instantáneo
             
             if time.time() - getattr(self, 'tiempo_ultimo_spawn', 0) < delay_spawn:
                 return
@@ -135,7 +129,7 @@ class GestorArena(Entity):
             posicion_aleatoria = None
             for _ in range(10): # Intentar hasta 10 veces encontrar posición válida
                 angulo = random.uniform(0, 2 * math.pi)
-                distancia = random.uniform(70, 110)
+                distancia = random.uniform(15, 30) # Spawnean mucho más cerca del jugador
                 
                 if self.jugador:
                     offset_x = self.jugador.x + math.cos(angulo) * distancia
@@ -229,6 +223,9 @@ class GestorArena(Entity):
                     from ursina import color
                     enemigo.modelo_visual.color = color.white
                     enemigo.modelo_visual.enabled = True
+                    
+                if hasattr(enemigo, 'emerger'):
+                    enemigo.emerger()
             else:
                 opciones = [VillanoL, VillanoO]
                 if getattr(self, 'ronda_actual', 1) >= 3:
@@ -238,65 +235,63 @@ class GestorArena(Entity):
                 enemigo = tipo_enemigo(position=posicion_aleatoria, rotation_y=rotacion_aleatoria)
                 enemigo.gestor_padre = self
                 self.enemigos.append(enemigo)
+                
+                if hasattr(enemigo, 'emerger'):
+                    enemigo.emerger()
 
             
             # Reevaluar vivos inmediatamente para que spawnee los 5 en un solo frame
             vivos.append(enemigo)
 
-        # Solo si está sellado dentro empezamos a checar la victoria
-        if self.jugador_dentro and not self.completada:
-            
-            # --- DETECCIÓN DE MUERTE DEL JEFE (MODO SUPERVIVENCIA) ---
-            if self.indice_arena == 2 and self.jefe_class and not getattr(self, 'modo_survival_activo', False):
-                # Buscar al jefe en la lista de enemigos
-                jefe_instancia = next((e for e in self.enemigos if isinstance(e, self.jefe_class)), None)
-                if jefe_instancia and hasattr(jefe_instancia, 'vida') and jefe_instancia.vida <= 0:
-                    self.modo_survival_activo = True
-                    self.max_rondas = float('inf')
-                    if self.gestor_portal:
-                        self.gestor_portal.completar_mision_jefe()
-                    
-                    from ursina import Text, color, destroy
-                    msg = Text(text="¡VICTORIA!\n<red>MODO SUPERVIVENCIA ACTIVADO", origin=(0, 0), scale=4, y=0.2)
-                    msg.animate_color(color.rgba(255, 0, 0, 0), duration=5, delay=3.0)
-                    destroy(msg, delay=8.5)
+        # Solo si está sellado dentro empezamos a checar el final de la ronda
+        if self.jugador_dentro and not getattr(self, 'completada', False):
             
             if len(vivos) == 0 and self.spawns_pendientes <= 0:
                 if not hasattr(self, 'ronda_actual'):
                     self.ronda_actual = 1
                     
-                if not hasattr(self, 'max_rondas'):
-                    self.max_rondas = float('inf')
+                self.max_rondas = float('inf')
                 
-                # Drop de Pieza (Misión RECOLECTAR) al superar una ronda (si no es infinita)
-                if self.gestor_portal and self.gestor_portal.tipo_mision == "RECOLECTAR" and self.ronda_actual <= 5:
-                    from scripts.pieza import PiezaPortal
-                    modelos_piezas = [
-                        ("Carcasa", "assets/modelos/carcasa_reducida.glb"),
-                        ("Pinzas", "assets/modelos/pinzas.glb"),
-                        ("Emisor", "assets/modelos/emisor_portal.glb"),
-                        ("Base", "assets/modelos/base_trasera.glb"),
-                        ("Lateral", "assets/modelos/Carcasa_lateral.glb")
-                    ]
-                    # Soltar una pieza diferente cada ronda cerca del jugador
-                    idx = min(self.ronda_actual - 1, len(modelos_piezas)-1)
-                    nombre, modelo = modelos_piezas[idx]
+                self.ronda_actual += 1
+                self.spawns_pendientes = self.cantidad_enemigos + (self.ronda_actual * 5)
+                
+                print(f"¡Inicia Ronda {self.ronda_actual}!")
+                
+                # --- SISTEMA DE SPAWN DE JEFES CÍCLICOS ---
+                if self.ronda_actual % 5 == 0:
+                    ciclo = (self.ronda_actual - 1) // 20
+                    multiplicador_vida = 1.0 + (0.10 * ciclo)
                     
-                    # Dropear frente al jugador
-                    pos_drop = self.jugador.position + self.jugador.forward * 3
-                    pos_drop.y = 1
-                    PiezaPortal(nombre_pieza=nombre, modelo_path=modelo, position=pos_drop, gestor=self.gestor_portal)
-                    print(f"Pieza {nombre} dropeada tras superar la ronda {self.ronda_actual}")
-
-                if self.ronda_actual < self.max_rondas:
-                    self.ronda_actual += 1
-                    # Incrementamos dificultad agresivamente en modo survival
-                    if getattr(self, 'modo_survival_activo', False):
-                        self.spawns_pendientes = self.cantidad_enemigos + (self.ronda_actual * 5)
-                    else:
-                        self.spawns_pendientes = self.cantidad_enemigos + (self.ronda_actual * 2)
+                    jefe_spawn = None
+                    vida_base = 0
+                    
+                    if self.ronda_actual % 20 == 5:
+                        from scripts.golem import GolemBoss
+                        jefe_spawn = GolemBoss
+                        vida_base = 1000
+                    elif self.ronda_actual % 20 == 10:
+                        from scripts.witch import BrujaBoss
+                        jefe_spawn = BrujaBoss
+                        vida_base = 1200
+                    elif self.ronda_actual % 20 == 15:
+                        from scripts.knight import KnightBoss
+                        jefe_spawn = KnightBoss
+                        vida_base = 1500
+                    elif self.ronda_actual % 20 == 0:
+                        from scripts.dragon import DragonBoss
+                        jefe_spawn = DragonBoss
+                        vida_base = 2000
                         
-                    print(f"¡Inicia Ronda {self.ronda_actual}!")
+                    if jefe_spawn:
+                        pos_jefe = (self.centro_x, 0, self.centro_z)
+                        vida_final = vida_base * multiplicador_vida
+                        print(f"SPAWN DE JEFE: {jefe_spawn.__name__} con {vida_final} HP")
+                        
+                        nuevo_jefe = jefe_spawn(position=pos_jefe, vida_maxima_override=vida_final)
+                        nuevo_jefe.gestor_padre = self
+                        self.enemigos.append(nuevo_jefe)
+                        if hasattr(nuevo_jefe, 'emerger'):
+                            nuevo_jefe.emerger()
                     
                     import __main__ as main
                     if hasattr(main, 'power_up_service') and main.power_up_service:
@@ -316,22 +311,8 @@ class GestorArena(Entity):
                     texto_ronda.animate_color(color.rgba(255, 0, 0, 0), duration=4, delay=2.0)
                     texto_ronda.animate_scale(4.5, duration=3)
                     destroy(texto_ronda, delay=3.5)
-                else:
-                    self.completada = True
-                    print("¡Arena despejada! Abriendo puertas frontales y siguiente arena...")
-                    
-                    # --- ABRIR PUERTAS TRASERAS DE LA SIGUIENTE ARENA ---
-                    import __main__ as main
-                    if hasattr(main, 'gestores_arena'):
-                        if self.indice_arena + 1 < len(main.gestores_arena):
-                            sig_gestor = main.gestores_arena[self.indice_arena + 1]
-                            for p in sig_gestor.puertas_atras:
-                                if p:
-                                    p.abrir()
-                    
-                    for puerta in self.puertas_frente:
-                        if puerta:
-                            puerta.abrir()
+                # Eliminamos la condición del 'else' para terminar arenas
+                # Ya que las rondas son infinitas.
 
         # --- SELLAR ARENA AL SALIR Y ELIMINAR CADÁVERES ---
         # Si la arena fue completada, revisamos si el jugador ya salió hacia el patio.

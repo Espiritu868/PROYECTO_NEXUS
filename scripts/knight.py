@@ -2,7 +2,7 @@ from ursina import Entity, color, time, Vec3, destroy, held_keys
 from direct.actor.Actor import Actor
 
 class KnightBoss(Entity):
-    def __init__(self, **kwargs):
+    def __init__(self, vida_maxima_override=None, **kwargs):
         super().__init__(**kwargs)
         
         # --- CARGA DEL MODELO ANIMADO GLB ---
@@ -51,11 +51,15 @@ class KnightBoss(Entity):
         from ursina import BoxCollider
         self.collider = BoxCollider(self, center=Vec3(0, 1.5, 0), size=Vec3(1.5, 3, 1.5))
         
-        self.vida = 1500
+        self.vida_maxima = vida_maxima_override if vida_maxima_override else 1500
+        self.vida = self.vida_maxima
         self.velocidad_caminar = 3.0
         self.velocidad_correr = 6.0
         self.rango_ataque = 4.0
         self.tiempo_vivo = 0.0
+        
+        self.tiempo_entre_ataques = 2.5
+        self.ultimo_ataque = 0
 
     def recibir_dano(self, cantidad):
         self.vida -= cantidad
@@ -75,6 +79,13 @@ class KnightBoss(Entity):
         if self.actor:
             # No tenemos animación de morir aún, así que le ponemos la de ataque y lo destruimos
             self.actor.play('attack')
+            
+        # --- DROP POWERUP ---
+        from scripts.powerups import PowerUp
+        import random
+        tipos = ['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad']
+        PowerUp(random.choice(tipos), position=self.position)
+        
         destroy(self, delay=2)
 
     def update(self):
@@ -104,23 +115,45 @@ class KnightBoss(Entity):
         
         if direccion.length() > 15:
             # Muy lejos: Correr
-            if self.estado_actual != 'run' and self.actor:
-                self.actor.loop('run')
+            if self.estado_actual != 'run' and self.estado_actual != 'attack':
+                if self.actor: self.actor.loop('run')
                 self.estado_actual = 'run'
-            self.position += direccion.normalized() * self.velocidad_correr * time.dt
-            self.look_at(objetivo)
+            if self.estado_actual != 'attack':
+                self.position += direccion.normalized() * self.velocidad_correr * time.dt
+                self.look_at(objetivo)
             
-        elif direccion.length() > 3:
+        elif direccion.length() > self.rango_ataque:
             # Cerca: Caminar hacia el jugador
-            if self.estado_actual != 'walk' and self.actor:
-                self.actor.loop('walk')
+            if self.estado_actual != 'walk' and self.estado_actual != 'attack':
+                if self.actor: self.actor.loop('walk')
                 self.estado_actual = 'walk'
-            self.position += direccion.normalized() * self.velocidad_caminar * time.dt
-            self.look_at(objetivo)
+            if self.estado_actual != 'attack':
+                self.position += direccion.normalized() * self.velocidad_caminar * time.dt
+                self.look_at(objetivo)
             
         else:
             # Muy cerca: Atacar
-            if self.estado_actual != 'attack' and self.actor:
-                self.actor.play('attack')
-                self.estado_actual = 'attack'
-            self.look_at(objetivo)
+            if time.time() - self.ultimo_ataque > self.tiempo_entre_ataques:
+                if self.estado_actual != 'attack' and self.actor:
+                    self.actor.play('attack')
+                    self.estado_actual = 'attack'
+                    self.ultimo_ataque = time.time()
+                    
+                    # Aplicar daño después de 0.5s para sincronizar con la espada
+                    from ursina import invoke
+                    def aplicar_dano():
+                        if self.estado_actual != 'dead' and self.jugador_objetivo and not self.jugador_objetivo.esta_muerto:
+                            d = (self.jugador_objetivo.position - self.position).length()
+                            if d <= self.rango_ataque + 2:
+                                self.jugador_objetivo.recibir_dano(45)
+                    invoke(aplicar_dano, delay=0.5)
+                    
+                    # Volver a idle después del golpe
+                    invoke(lambda: setattr(self, 'estado_actual', 'idle'), delay=1.5)
+            else:
+                if self.estado_actual != 'attack' and self.estado_actual != 'idle':
+                    self.estado_actual = 'idle'
+                    if self.actor: self.actor.loop('idle')
+                    
+            if self.estado_actual != 'attack':
+                self.look_at(objetivo)

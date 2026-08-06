@@ -158,6 +158,22 @@ def iniciar_carga_pesada():
     from scripts.powerups import precargar_modelos_powerups
     precargar_modelos_powerups()
     
+    actualizar_loading(0.4, "Precargando Jefes en la memoria (Evitando tirones)...")
+    from scripts.golem import GolemBoss
+    from scripts.witch import BrujaBoss
+    from scripts.knight import KnightBoss
+    from scripts.dragon import DragonBoss
+    from ursina import destroy
+    # Instanciamos a los jefes debajo del mapa para obligar al motor a cargar sus texturas y animaciones a RAM
+    gb = GolemBoss(position=(0,-500,0))
+    bb = BrujaBoss(position=(0,-500,0))
+    kb = KnightBoss(position=(0,-500,0))
+    db = DragonBoss(position=(0,-500,0))
+    destroy(gb)
+    destroy(bb)
+    destroy(kb)
+    destroy(db)
+    
     from scripts.power_up_service import PowerUpService
     global power_up_service
     power_up_service = PowerUpService(pool_powerups=['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad'])
@@ -195,11 +211,9 @@ def iniciar_carga_pesada():
         
         centro_arena_x = 0
         centro_arena_z = indice * coordinador.offset_z
-        jefe_asignado = None
-        
-        if indice == 2:
-            from scripts.golem import GolemBoss
-            jefe_asignado = GolemBoss
+        # ============================================================== #  
+        # ARENA PURA DE SUPERVIVENCIA (SIN MISIONES)
+        # ============================================================== #
         
         # Incrementar drásticamente la cantidad de enemigos
         cantidad_enemigos = min(15 + (indice * 10), 150)
@@ -207,46 +221,8 @@ def iniciar_carga_pesada():
         puertas_f = coordinador.puertas_frente_por_arena[indice]
         puertas_a = coordinador.puertas_atras_por_arena[indice]
         
-        # ============================================================== #  
-        # SISTEMA DE MISIONES AGREGADO                                   #
-        from scripts.pieza import PiezaPortal
-        from scripts.gestor_portal import GestorPortal 
-        from scripts.grieta import Grieta
-
-        # El juego elige la misión al azar para esta arena
-        misiones_disponibles = ["RECOLECTAR", "SELLAR_GRIETAS"]
-        
-        if indice == 2:
-            tipo_mision_elegida = "ELIMINAR_JEFE"
-        else:
-            tipo_mision_elegida = random.choice(misiones_disponibles)
-
-        gestor_portal_arena = GestorPortal(
-            offset_z=coordinador.offset_z, 
-            tipo_mision=tipo_mision_elegida,
-            indice_arena=indice
-        )
-
-        #  SOLO generamos las grietas si la misión elegida es "SELLAR_GRIETAS".
-        #  Las piezas de "RECOLECTAR" ahora se sueltan de los enemigos en combate.
-        if tipo_mision_elegida == "SELLAR_GRIETAS": 
-            sectores_grietas = [ 
-                (random.randint(-140, -50), random.randint(-120, -20)),
-                (random.randint(50, 140), random.randint(-120, 20)),
-                (random.randint(-70, 70), random.randint(60, 150)), 
-            ] 
-            random.shuffle(sectores_grietas) 
-            
-            for offset_x, offset_z in sectores_grietas:
-                pos_x = centro_arena_x + offset_x
-                pos_z = centro_arena_z + offset_z 
-                
-                g = Grieta(position=(pos_x, 1, pos_z), gestor=gestor_portal_arena)
-                print(f" Grieta creada en: {g.position}")
-        # ============================================================== #
-        
         gestor = GestorArena(
-            jefe_class=jefe_asignado,
+            jefe_class=None, # El jefe se asignará dinámicamente por ronda
             cantidad_enemigos=cantidad_enemigos,
             centro_x=centro_arena_x,
             centro_z=centro_arena_z,
@@ -254,7 +230,7 @@ def iniciar_carga_pesada():
             puertas_atras=puertas_a,
             limite_z=centro_arena_z - 200, # Entrada a la arena
             indice_arena=indice,
-            gestor_portal=gestor_portal_arena
+            gestor_portal=None
         )
         gestores_arena.append(gestor)
 

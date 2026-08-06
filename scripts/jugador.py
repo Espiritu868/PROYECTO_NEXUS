@@ -99,7 +99,7 @@ class Jugador(Entity):
                     'run': ruta_base + 'sas_run.glb',
                     'dash': ruta_base + 'sas_dash.glb',
                     'jump': ruta_base + 'sas_jump.glb',
-                    'slash': ruta_base + 'sas_idle.glb', # Fallback temporal
+                    'slash': ruta_base + 'sas_slash.glb',
                     'uppercut': ruta_base + 'sas_idle.glb', # Fallback temporal
                     'kick': ruta_base + 'sas_idle.glb', # Fallback temporal
                     'hit': ruta_base + 'sas_hit.glb',
@@ -354,10 +354,10 @@ class Jugador(Entity):
             self.camara_frontal = not self.camara_frontal
 
         # CHEAT CODES
-        if len(key) == 1 and key.isalpha():
+        if len(key) == 1 and key.isalnum():
             self.teclas_escritas += key.lower()
-            if len(self.teclas_escritas) > 10:
-                self.teclas_escritas = self.teclas_escritas[-10:]
+            if len(self.teclas_escritas) > 15:
+                self.teclas_escritas = self.teclas_escritas[-15:]
             if self.teclas_escritas.endswith("asnaeb"):
                 self.invulnerable = not self.invulnerable
                 self.teclas_escritas = "" # Reset
@@ -366,6 +366,30 @@ class Jugador(Entity):
                 self.ganar_monedas(100000)
                 self.teclas_escritas = "" # Reset
                 print("Cheat HESOYAM activado: +100,000 Monedas")
+                
+        if key == 'enter':
+            import re
+            match = re.search(r'round(\d+)$', self.teclas_escritas)
+            if match:
+                numero = int(match.group(1))
+                self.teclas_escritas = "" # Reset
+                
+                import __main__ as main
+                if hasattr(main, 'gestores_arena') and hasattr(main, 'coordinador'):
+                    indice_arena = int(round(self.z / main.coordinador.offset_z))
+                    if 0 <= indice_arena < len(main.gestores_arena):
+                        gestor = main.gestores_arena[indice_arena]
+                        gestor.ronda_actual = max(1, numero - 1)
+                        
+                        # Matar a todos los enemigos menos 1
+                        enemigos_vivos = [e for e in gestor.enemigos if e.enabled and hasattr(e, 'vida') and e.vida > 0]
+                        for e in enemigos_vivos[1:]:
+                            e.vida = 0
+                            e.esta_muerto = True
+                            if hasattr(e, 'morir'): e.morir()
+                            
+                        gestor.spawns_pendientes = 0
+                        print(f"Cheat ROUND activado: Saltando a ronda {numero} cuando muera el último zombie.")
         
         # --- ZOOM CON RUEDA DEL RATÓN ---
         if key == 'scroll up':
@@ -397,6 +421,47 @@ class Jugador(Entity):
                     
         if key == 'c' and self.dash_disponible and not self.haciendo_dash and not self.atacando:
             self.iniciar_dash()
+            
+        if key == 'v' and not self.atacando and not self.haciendo_dash:
+            self.ataque_melee()
+
+    def ataque_melee(self):
+        self.atacando = True
+        
+        # Animación de ataque
+        if self.actor:
+            self.actor.setPlayRate(2.0, 'slash') # Animación el doble de rápida
+            self.actor.play('slash')
+            self.estado_animacion = 'slash'
+            
+        # Detección de colisión (cuerpo a cuerpo)
+        # Hacemos raycast en la dirección forward del jugador a corta distancia
+        import __main__ as main
+        
+        # Calculamos distancia con todos los enemigos vivos para simular daño de área cuerpo a cuerpo en frente
+        if hasattr(main, 'gestores_arena') and main.gestores_arena:
+            # Buscar en la arena actual
+            indice_jugador = int(round(self.z / main.coordinador.offset_z)) if hasattr(main, 'coordinador') and main.coordinador else 0
+            if 0 <= indice_jugador < len(main.gestores_arena):
+                gestor = main.gestores_arena[indice_jugador]
+                for enemigo in gestor.enemigos:
+                    if enemigo and enemigo.enabled and hasattr(enemigo, 'vida') and enemigo.vida > 0:
+                        distancia = (enemigo.world_position - self.world_position).length()
+                        if distancia < self.rango_ataque:
+                            # Comprobar si el enemigo está en frente nuestro
+                            dir_al_enemigo = (enemigo.world_position - self.world_position).normalized()
+                            # Producto punto para ver si el ángulo es menor a ~45 grados (cos 45 = 0.707)
+                            if self.forward.dot(dir_al_enemigo) > 0.5:
+                                enemigo.recibir_dano(self.dano_ataque * 2) # Doble daño por cuchillo
+                                
+                                # Efecto visual de sangre o golpe
+                                from ursina import Entity, color, destroy
+                                particula = Entity(model='cube', color=color.red, scale=0.3, position=enemigo.world_position + Vec3(0, 1.5, 0), unlit=True)
+                                particula.animate_scale(0, duration=0.3)
+                                destroy(particula, delay=0.3)
+
+        # El ataque ahora es el doble de rápido (0.4s en lugar de 0.8s)
+        invoke(self.terminar_ataque, delay=0.4)
 
     def actualizar_hud_ronda(self):
         ronda = self.ronda_actual

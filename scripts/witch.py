@@ -75,7 +75,7 @@ class IceAura(Entity):
 
 
 class BrujaBoss(Entity):
-    def __init__(self, position=(0,0,0), **kwargs):
+    def __init__(self, position=(0,0,0), vida_maxima_override=None, **kwargs):
         super().__init__(position=position, **kwargs)
         
         self.altura_vuelo = 1.5
@@ -108,7 +108,7 @@ class BrujaBoss(Entity):
             self.modelo_visual.color = color.cyan
             self.estado_actual = 'error'
 
-        self.vida_maxima = 300
+        self.vida_maxima = vida_maxima_override if vida_maxima_override else 1200
         self.vida = self.vida_maxima
         self.velocidad = 15
         
@@ -157,6 +157,12 @@ class BrujaBoss(Entity):
     def morir(self):
         self.cambiar_estado('dead')
         self.barra_vida_fg.color = color.black
+        
+        # --- DROP POWERUP ---
+        from scripts.powerups import PowerUp
+        import random
+        tipos = ['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad']
+        PowerUp(random.choice(tipos), position=Vec3(self.position.x, 0, self.position.z))
         
         # Efecto de caída dramática (cae al piso)
         self.animate_y(0.1, duration=1.0)

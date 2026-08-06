@@ -2,7 +2,7 @@ from ursina import Entity, color, time, Vec3, destroy
 from direct.actor.Actor import Actor
 
 class GolemBoss(Entity):
-    def __init__(self, **kwargs):
+    def __init__(self, vida_maxima_override=None, **kwargs):
         super().__init__(**kwargs)
         
         # --- CARGA DEL MODELO ANIMADO GLB ---
@@ -52,8 +52,8 @@ class GolemBoss(Entity):
         self.collider = BoxCollider(self, center=Vec3(0, 2.5, 0), size=Vec3(3, 5, 3))
         
         # --- SISTEMA DE COMBATE (VIDA Y DAÑO) ---
-        self.vida = 2500
-        self.vida_maxima = 2500
+        self.vida_maxima = vida_maxima_override if vida_maxima_override else 1000
+        self.vida = self.vida_maxima
         self.velocidad_caminar = 2.0
         self.velocidad_correr = 5.0
         self.rango_ataque = 5.0
@@ -88,6 +88,12 @@ class GolemBoss(Entity):
         from ursina import destroy, color
         destroy(self.barra_vida_fondo)
         
+        # --- DROP POWERUP ---
+        from scripts.powerups import PowerUp
+        import random
+        tipos = ['max_salud', 'max_municion', 'insta_kill', 'bomba', 'doble_cadencia', 'recarga_rapida', 'velocidad']
+        PowerUp(random.choice(tipos), position=self.position)
+        
         if self.actor:
             # Usar la animación arise invertida si no hay una animación de muerte directa, o simplemente frenarlo
             self.actor.stop()
@@ -102,11 +108,27 @@ class GolemBoss(Entity):
                 self.collider.clear()
 
 
+    def emerger(self):
+        from ursina import invoke
+        self.estado_actual = 'arise'
+        if self.actor:
+            self.actor.play('arise')
+        # La animación de arise dura aprox 2-3 segundos, bloqueamos a la IA ese tiempo
+        self.tiempo_emergiendo = 3.0
+
     def update(self):
         if self.esta_muerto:
             return
             
-        # IA Básica del Golem (Busca al jugador y lo ataca)     
+        # Bloquear IA si está emergiendo
+        if getattr(self, 'tiempo_emergiendo', 0) > 0:
+            self.tiempo_emergiendo -= time.dt
+            if self.tiempo_emergiendo <= 0:
+                self.estado_actual = 'idle'
+                if self.actor:
+                    self.actor.loop('idle')
+            return
+            
         if self.estado_actual == 'dead':
             return
             
@@ -114,14 +136,45 @@ class GolemBoss(Entity):
         import __main__ as main
         if hasattr(main, 'jugador_principal'):
             jugador = main.jugador_principal
+            if jugador.esta_muerto:
+                return
+                
             direccion = jugador.position - self.position
             direccion.y = 0 
             distancia = direccion.length()
             
             objetivo = Vec3(jugador.x, self.y, jugador.z)
+            self.look_at(objetivo)
             
-            # Atacar si está lo suficientemente cerca
-            if distancia < self.rango_ataque:
-                if self.estado_actual != 'attack':
+            # --- COMBATE ---
+            if distancia <= self.rango_ataque:
+                if time.time() - self.ultimo_ataque > self.tiempo_entre_ataques:
                     self.estado_actual = 'attack'
-                self.look_at(objetivo)
+                    self.ultimo_ataque = time.time()
+                    if self.actor:
+                        self.actor.play('attack')
+                    # Dañar al jugador
+                    jugador.recibir_dano(40)
+                    
+                    # Regresar a idle después del golpe
+                    from ursina import invoke
+                    invoke(lambda: setattr(self, 'estado_actual', 'idle'), delay=1.0)
+            else:
+                if self.estado_actual != 'attack':
+                    if distancia > 20:
+                        self.estado_actual = 'run'
+                    else:
+                        self.estado_actual = 'walk'
+                    
+            # --- MOVIMIENTO Y ANIMACIONES ---
+            if self.estado_actual == 'run':
+                if self.actor and self.actor.getCurrentAnim() != 'run':
+                    self.actor.loop('run')
+                self.position += self.forward * self.velocidad_correr * time.dt
+            elif self.estado_actual == 'walk':
+                if self.actor and self.actor.getCurrentAnim() != 'walk':
+                    self.actor.loop('walk')
+                self.position += self.forward * self.velocidad_caminar * time.dt
+            elif self.estado_actual == 'idle':
+                if self.actor and self.actor.getCurrentAnim() != 'idle':
+                    self.actor.loop('idle')

@@ -93,6 +93,7 @@ class EnemigoBase(Entity):
         
         self.curando = False
         self.curado = False
+        self.emergiendo = False
         
         self.ultimo_tiempo_esquiva = 0
         self.direccion_esquiva = 0
@@ -114,7 +115,17 @@ class EnemigoBase(Entity):
             else:
                 self.actor.play(anim)
 
+    def emerger(self):
+        from ursina import invoke
+        self.emergiendo = True
+        self.y = -3
+        self.animate_position((self.x, 0, self.z), duration=1.5)
+        invoke(lambda: setattr(self, 'emergiendo', False), delay=1.5)
+
     def update(self):
+        if self.emergiendo:
+            return
+
         if self.curando and not self.curado:
             return
         elif self.curado:
@@ -165,8 +176,8 @@ class EnemigoBase(Entity):
             
         self.tiempo_ia += time.dt
         
-        # --- LÓGICA DE IA (Se ejecuta a 10 FPS para ahorrar 83% de CPU) ---
-        if self.tiempo_ia >= 0.1:
+        # --- LÓGICA DE IA (Se ejecuta a 3 FPS para movimientos más orgánicos) ---
+        if self.tiempo_ia >= 0.33:
             self.tiempo_ia = 0
             
             # OPTIMIZACIÓN: Usar posicion_rastreo (breadcrumb)
@@ -179,18 +190,36 @@ class EnemigoBase(Entity):
             if dist_jugador < 8.0 or (dx_rastreo*dx_rastreo + dz_rastreo*dz_rastreo) < 9.0:
                 posicion_objetivo = self.jugador_objetivo.position
                 
-            # --- INTELIGENCIA DE NAVEGACIÓN ENTRE ARENAS ---
+            # --- INTELIGENCIA DE NAVEGACIÓN (EVITAR MUROS Y SATURACIÓN) ---
             if hasattr(self, 'gestor_padre') and self.gestor_padre:
                 cx = self.gestor_padre.centro_x
                 cz = self.gestor_padre.centro_z
                 
-                # Si el jugador (objetivo) está fuera de nuestra arena actual (eje Z)
-                if abs(posicion_objetivo.z - cz) > 90:
-                    # Y el zombi no está dentro de la zona de pasillo central (X +- 45)
-                    if abs(self.x - cx) > 40:
-                        from ursina import Vec3
-                        # En lugar de caminar hacia la pared, camina directo al pasillo central primero
-                        posicion_objetivo = Vec3(cx, self.y, self.z + (20 if posicion_objetivo.z > cz else -20))
+                rel_z = self.z - cz
+                obj_rel_z = posicion_objetivo.z - cz
+                rel_x = self.x - cx
+                
+                # Las arenas tienen muros en Z=-100, Z=0, Z=100. Solo se pueden cruzar por el centro (X = cx).
+                # Dividimos el mapa en "zonas" horizontales cada 100 metros.
+                zona_zombi = int(math.floor((rel_z + 100) / 100.0))
+                zona_obj = int(math.floor((obj_rel_z + 100) / 100.0))
+                
+                # Si el zombi y el jugador están separados por uno de estos muros
+                if zona_zombi != zona_obj:
+                    # Histéresis: una vez decide ir al pasillo, no se rinde hasta estar bien adentro
+                    if abs(rel_x) > 35:
+                        self.buscando_pasillo = True
+                        
+                    if getattr(self, 'buscando_pasillo', False):
+                        if abs(rel_x) < 20: # Ya está seguro en el centro
+                            self.buscando_pasillo = False
+                        else:
+                            from ursina import Vec3
+                            # Apunta hacia el pasillo central
+                            dir_z = 20 if obj_rel_z > rel_z else -20
+                            posicion_objetivo = Vec3(cx, self.y, self.z + dir_z)
+                else:
+                    self.buscando_pasillo = False
                 
             dx = posicion_objetivo.x - self.x
             dz = posicion_objetivo.z - self.z
