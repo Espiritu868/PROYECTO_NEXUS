@@ -124,6 +124,13 @@ class Jugador(Entity):
             # Amplificamos la escala (120) validada por el usuario
             self.modelo_visual.scale = (120, 120, 120)           
             
+            # FIX TEXTURAS PBR
+            try:
+                from scripts.utils import fijar_texturas_pbr
+                fijar_texturas_pbr(self.actor)
+            except:
+                pass
+            
             # --- SEGUIMIENTO DE HUESO PARA EL ARMA ---
             try:
                 hueso = self.actor.exposeJoint(None, 'modelRoot', 'mixamorig:RightHand')

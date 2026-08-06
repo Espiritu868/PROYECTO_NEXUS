@@ -38,6 +38,13 @@ class EnemigoBase(Entity):
             # Estado inicial
             self.estado_animacion = 'idle'
             self.actor.loop('idle')
+            
+            # FIX TEXTURAS PBR
+            try:
+                from scripts.utils import fijar_texturas_pbr
+                fijar_texturas_pbr(self.actor)
+            except:
+                pass
         else:
             # Fallback en caso de que un jefe siga usando el sistema viejo
             self.actor = None
@@ -234,6 +241,12 @@ class EnemigoBase(Entity):
                 # Caminar hacia el jugador
                 if time.time() - self.ultimo_ataque > 1.0:
                     self.debe_moverse = True
+                    # Sonidos de caminata (ambiente)
+                    try:
+                        from scripts.gestor_sonidos_zombie import ZombiesAudioManager
+                        ZombiesAudioManager.solicitar_sonido_ambiente(self)
+                    except:
+                        pass
                 else:
                     self.debe_moverse = False
             else:
@@ -414,7 +427,17 @@ class EnemigoBase(Entity):
 
 
     def atacar(self):
-        if time.time() - self.ultimo_ataque > self.tiempo_entre_ataques:
+        ahora = time.time()
+        if ahora - self.ultimo_ataque > self.tiempo_entre_ataques:
+            self.ultimo_ataque = ahora
+            
+            # Sonido de ataque
+            try:
+                from scripts.gestor_sonidos_zombie import ZombiesAudioManager
+                ZombiesAudioManager.solicitar_sonido_ataque(self)
+            except:
+                pass
+            
             # Dañar al jugador
             if self.jugador_objetivo:
                 if hasattr(self.jugador_objetivo, 'recibir_dano'):

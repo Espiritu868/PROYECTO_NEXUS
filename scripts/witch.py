@@ -101,6 +101,14 @@ class BrujaBoss(Entity):
             self.actor.loop('idle')
             self.estado_actual = 'idle'
             self.actor.setBlend(frameBlend=True)
+            
+            # FIX TEXTURAS PBR
+            try:
+                from scripts.utils import fijar_texturas_pbr
+                fijar_texturas_pbr(self.actor)
+            except:
+                pass
+                
         except Exception as e:
             print(f"Error cargando Bruja: {e}")
             self.actor = None

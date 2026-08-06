@@ -83,6 +83,14 @@ class DragonBoss(Entity):
             self.actor.play('arise')
             self.estado_animacion = 'arise'
             self.actor.setBlend(frameBlend=True)
+            
+            # FIX TEXTURAS PBR
+            try:
+                from scripts.utils import fijar_texturas_pbr
+                fijar_texturas_pbr(self.actor)
+            except:
+                pass
+                
         except Exception as e:
             print(f"Error cargando Dragón: {e}")
             self.actor = None

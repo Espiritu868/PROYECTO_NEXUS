@@ -23,6 +23,12 @@ class Zombie(EnemigoBase):
             self.frenesi = True
             self.velocidad = self.velocidad_normal * 1.3
             
+            # Sonido de frenesí (grito extendido)
+            try:
+                from scripts.gestor_sonidos_zombie import ZombiesAudioManager
+                ZombiesAudioManager.solicitar_sonido_frenesi(self)
+            except:
+                pass
             
             # Efecto visual de furia (Usamos set_color_scale)
             if self.actor:

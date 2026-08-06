@@ -270,16 +270,19 @@ class GestorArena(Entity):
                         jefe_spawn = GolemBoss
                         vida_base = 1000
                     elif self.ronda_actual % 20 == 10:
-                        from scripts.witch import BrujaBoss
-                        jefe_spawn = BrujaBoss
+                        # BRUJA DESACTIVADA - USANDO GOLEM TEMPORALMENTE
+                        from scripts.golem import GolemBoss
+                        jefe_spawn = GolemBoss
                         vida_base = 1200
                     elif self.ronda_actual % 20 == 15:
-                        from scripts.knight import KnightBoss
-                        jefe_spawn = KnightBoss
+                        # KNIGHT DESACTIVADO - USANDO GOLEM TEMPORALMENTE
+                        from scripts.golem import GolemBoss
+                        jefe_spawn = GolemBoss
                         vida_base = 1500
                     elif self.ronda_actual % 20 == 0:
-                        from scripts.dragon import DragonBoss
-                        jefe_spawn = DragonBoss
+                        # DRAGON DESACTIVADO - USANDO GOLEM TEMPORALMENTE
+                        from scripts.golem import GolemBoss
+                        jefe_spawn = GolemBoss
                         vida_base = 2000
                         
                     if jefe_spawn:

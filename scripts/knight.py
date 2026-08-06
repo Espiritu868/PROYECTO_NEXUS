@@ -32,6 +32,13 @@ class KnightBoss(Entity):
             # Hacer que se vea más brillante (Multiplicamos los colores x1.5)
             self.actor.setColorScale(1.5, 1.5, 1.5, 1)
             
+            # FIX TEXTURAS PBR
+            try:
+                from scripts.utils import fijar_texturas_pbr
+                fijar_texturas_pbr(self.actor)
+            except:
+                pass
+            
         except Exception as e:
             print(f"=================================")
             print(f"ERROR CARGANDO EL KNIGHT GLB: {e}")
